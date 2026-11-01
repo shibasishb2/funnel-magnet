@@ -169,7 +169,7 @@ def generate(output_dir):
         {key: value for key, value in scenario.items() if key != "shifts"} for scenario in SCENARIOS
     ]
     (output_dir / "expected_results.json").write_text(
-        json.dumps(expected, indent=2) + "\n", encoding="utf-8"
+        json.dumps(expected, indent=2) + "\n", encoding="utf-8", newline="\n"
     )
 
 
