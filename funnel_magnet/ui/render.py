@@ -113,6 +113,14 @@ def _recommendation_html(item, evidence):
         "stabilize": "Stabilize",
         "unclear": "Unclear",
     }[item.expected_direction]
+    next_steps = "".join(
+        f'<p class="fm-panel-note">{label}: {escape(text)}</p>'
+        for label, text in (
+            ("If confirmed", item.if_confirmed_next_step),
+            ("If not confirmed", item.if_not_confirmed_next_step),
+        )
+        if text.strip()
+    )
     return (
         '<article class="fm-ai-card">'
         f'<div class="fm-ai-card-tag">Priority {item.priority} · {escape(item.action_type.capitalize())} '
@@ -120,6 +128,7 @@ def _recommendation_html(item, evidence):
         f"<p>{escape(item.action)}</p>"
         f'<p class="fm-panel-note">Expected direction for {escape(metric_label(item.target_metric))}: '
         f"{direction}. {escape(item.expected_impact)}</p>"
+        f"{next_steps}"
         f"{_citations(item.evidence_ids, evidence)}"
         "</article>"
     )

@@ -15,12 +15,24 @@ SPECULATION = re.compile(
 )
 NEGATION = re.compile(r"\b(not|cannot|no)\b", re.IGNORECASE)
 PROOF_CLAIMS = re.compile(
-    r"\b(proves?|proven|proof|definitely|certainly|undoubtedly|guaranteed?|root cause)\b",
+    r"\b(proves?|proven|proof|definitely|certainly|undoubtedly|guaranteed?|"
+    r"entirely attributable|solely attributable)\b",
     re.IGNORECASE,
 )
 CAUSAL_CLAIMS = re.compile(
     r"\b(caused by|causing|because of|due to|as a result of|resulted (?:in|from)|led to|"
     r"the reason)\b",
+    re.IGNORECASE,
+)
+# Fine for arithmetic when labelled as such, as in "mathematically explained by CPM".
+ATTRIBUTION_CLAIMS = re.compile(
+    r"\b(driven by|explained by|attributable to|accounted for by)\b", re.IGNORECASE
+)
+MATHEMATICAL_WORDING = re.compile(r"\b(mathematically|arithmetically)\b", re.IGNORECASE)
+ROOT_CAUSE = re.compile(r"\broot cause\b", re.IGNORECASE)
+ROOT_CAUSE_UNKNOWN = re.compile(
+    r"\broot cause\b.{0,60}\b(unknown|unconfirmed|unclear|undetermined|unverified|"
+    r"not (?:yet )?(?:been )?(?:known|established|confirmed|proven))\b",
     re.IGNORECASE,
 )
 NAMED_CAUSES = re.compile(
@@ -38,6 +50,23 @@ METRIC_CHANGE = re.compile(
     re.IGNORECASE,
 )
 
+# Parent metrics only move because their inputs move, so they can't support a hypothesis.
+PARENT_METRICS = ("roas", "cpa", "cpc", "cvr")
+
+# Data the engine doesn't have. A recommendation that needs it must list it as needed.
+UNAVAILABLE_DATA = {
+    "frequency": r"\bfrequency\b",
+    "reach": r"\b(?:reach (?:data|metrics?|figures?)|(?:ad|audience|unique) reach)\b",
+    "placement data": r"\bplacements?\b",
+    "audience data": r"\baudiences?\b",
+    "competitor data": r"\bcompetitors?\b",
+    "seasonality data": r"\bseasonal\w*\b",
+    "ad-level data": r"\bad[- ]level\b",
+    "bounce rate": r"\bbounce rate\b",
+    "page speed": r"\bpage speed\b",
+    "session data": r"\bsessions?\b",
+}
+
 
 def _sentences(text):
     return [part for part in re.split(r"(?<=[.!?;])\s+", text) if part.strip()]
@@ -50,6 +79,18 @@ def _check_claims(field, text):
             issues.append(f"{field} presents a conclusion as proven.")
         if CAUSAL_CLAIMS.search(sentence) and not HEDGES.search(sentence):
             issues.append(f"{field} states a cause as fact.")
+        if (
+            ATTRIBUTION_CLAIMS.search(sentence)
+            and not MATHEMATICAL_WORDING.search(sentence)
+            and not HEDGES.search(sentence)
+        ):
+            issues.append(f"{field} states a cause as fact instead of a mathematical relationship.")
+        if (
+            ROOT_CAUSE.search(sentence)
+            and not ROOT_CAUSE_UNKNOWN.search(sentence)
+            and not SPECULATION.search(sentence)
+        ):
+            issues.append(f"{field} claims a root cause has been established.")
         if NAMED_CAUSES.search(sentence) and not HEDGES.search(sentence):
             issues.append(f"{field} names a cause without evidence.")
         if METRIC_CHANGE.search(sentence) and not HEDGES.search(sentence):
@@ -94,6 +135,22 @@ def _check_sequence(field, values):
     return []
 
 
+def _has_direct_support(item, evidence):
+    """Medium confidence needs a separate material metric, and enough purchase volume."""
+    if any("directional" in fact.statement for fact in evidence.facts if fact.kind == "data_warning"):
+        return False
+
+    for fact_id in item.evidence_ids:
+        fact = evidence.by_id.get(fact_id)
+        if fact is None or fact.metric in (None, item.diagnostic_node, *PARENT_METRICS):
+            continue
+        if fact.data.get("status") not in (None, "stable", "undefined"):
+            return True
+        if fact.data.get("role") in ("adverse", "favorable"):
+            return True
+    return False
+
+
 def _check_hypotheses(result, evidence, allowed):
     issues = []
     if len(result.hypotheses) > 3:
@@ -109,6 +166,8 @@ def _check_hypotheses(result, evidence, allowed):
         issues += _check_text(f"{field} uncertainty", item.uncertainty, allowed)
         if not SPECULATION.search(item.statement):
             issues.append(f"{field} is not worded as a possibility.")
+        if item.confidence != "low" and not _has_direct_support(item, evidence):
+            issues.append(f"{field} has medium confidence without direct supporting evidence.")
         if item.diagnostic_node not in evidence.path_nodes:
             issues.append(f"{field} is about {item.diagnostic_node}, which is not on a diagnostic path.")
         elif evidence.metric_fact_id(item.diagnostic_node) not in item.evidence_ids:
@@ -116,15 +175,35 @@ def _check_hypotheses(result, evidence, allowed):
     return issues
 
 
+def _check_data_needs(field, item, listed):
+    """Require any unavailable data a recommendation relies on to be listed as needed."""
+    text = " ".join(
+        [item.action, item.expected_impact, item.if_confirmed_next_step, item.if_not_confirmed_next_step]
+    )
+    return [
+        f"{field} relies on {name} without listing it as additional information needed."
+        for name, pattern in UNAVAILABLE_DATA.items()
+        if re.search(pattern, text, re.IGNORECASE) and not re.search(pattern, listed, re.IGNORECASE)
+    ]
+
+
 def _check_recommendations(result, evidence, allowed):
     issues = _check_sequence("Recommendation priorities", [r.priority for r in result.recommendations])
     ranks = {item.rank for item in result.hypotheses}
+    listed = " ".join(need.information for need in result.additional_information)
 
     for item in result.recommendations:
         field = f"Recommendation {item.priority}"
         issues += _check_ids(field, item.evidence_ids, evidence)
         issues += _check_text(field, item.action, allowed)
         issues += _check_text(f"{field} expected impact", item.expected_impact, allowed)
+        issues += _check_data_needs(field, item, listed)
+        for label, text in (
+            ("if-confirmed step", item.if_confirmed_next_step),
+            ("if-not-confirmed step", item.if_not_confirmed_next_step),
+        ):
+            if item.action_type == "investigate" or text.strip():
+                issues += _check_text(f"{field} {label}", text, allowed)
         if item.hypothesis_rank not in ranks:
             issues.append(f"{field} is not linked to a hypothesis.")
         if item.target_metric not in evidence.metrics:

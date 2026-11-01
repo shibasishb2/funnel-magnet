@@ -4,12 +4,13 @@ import copy
 import io
 import json
 import socket
+from dataclasses import replace
 
 import pytest
 from google.genai import errors
 
 from funnel_magnet.ai import service
-from funnel_magnet.ai.evidence import build_evidence
+from funnel_magnet.ai.evidence import Fact, build_evidence
 from funnel_magnet.ai.prompt import SYSTEM_PROMPT, build_user_prompt
 from funnel_magnet.ai.providers import (
     AIError,
@@ -59,6 +60,8 @@ def valid_reply(evidence=None):
                 "target_metric": "cpm",
                 "expected_direction": "decrease",
                 "expected_impact": "Lower delivery costs would support ROAS if the hypothesis holds.",
+                "if_confirmed_next_step": "Shift budget away from the most expensive delivery.",
+                "if_not_confirmed_next_step": "Compare each campaign before changing budgets.",
                 "evidence_ids": [cpm, "G1"],
             }
         ],
@@ -337,6 +340,205 @@ def test_recommendation_must_link_to_a_hypothesis():
 def test_high_confidence_is_rejected_by_the_format(field, value):
     with pytest.raises(ValueError):
         AIDiagnosis.model_validate(edit(["hypotheses", 0, field], value))
+
+
+# Regressions from the first live response
+
+
+def test_first_live_wording_stays_rejected():
+    text = "The decline in ROAS was primarily driven by CPA, which was caused by rising CPC."
+
+    assert any("cause" in issue for issue in issues_for(edit(["executive_diagnosis"], text)))
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "The ROAS decline is mathematically explained by a higher CPA.",
+        "CPC is arithmetically explained by CPM and CTR.",
+        "ROAS fell, mathematically driven by CPM.",
+    ],
+)
+def test_mathematical_relationships_are_allowed(text):
+    assert issues_for(edit(["executive_diagnosis"], text)) == []
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "ROAS fell, driven by CPM.",
+        "The decline is explained by higher costs.",
+        "The rise in CPC is attributable to CPM.",
+        "The rise in CPC is entirely attributable to CPM.",
+        "ROAS was mathematically caused by CPM.",
+        "The decline is mathematically explained by creative fatigue.",
+    ],
+)
+def test_unlabelled_or_causal_links_are_rejected(text):
+    assert issues_for(edit(["executive_diagnosis"], text))
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "The root cause remains unknown.",
+        "The root cause of the CPM increase remains unconfirmed.",
+        "The root cause is unclear from this data.",
+        "The root cause has not yet been established.",
+        "The root cause may sit outside these metrics.",
+    ],
+)
+def test_unknown_root_cause_is_allowed(text):
+    assert issues_for(edit(["confidence_explanation"], text)) == []
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "The root cause is creative performance.",
+        "We found the root cause in delivery costs.",
+        "The root cause of the CPM increase remains external to the provided metrics.",
+        "The root cause is audience saturation.",
+    ],
+)
+def test_established_root_cause_is_rejected(text):
+    issues = issues_for(edit(["confidence_explanation"], text))
+
+    assert any("root cause" in issue or "cause" in issue for issue in issues)
+
+
+def medium_reply(evidence_ids):
+    return edit(["hypotheses", 0], dict(valid_reply()["hypotheses"][0], confidence="medium", evidence_ids=evidence_ids))
+
+
+def test_medium_confidence_without_direct_support_is_rejected():
+    issues = issues_for(medium_reply(["M6", "D1"]))
+
+    assert any("without direct supporting evidence" in issue for issue in issues)
+
+
+def test_parent_metrics_are_not_direct_support():
+    evidence = evidence_for()
+    parents = [evidence.metric_fact_id(metric) for metric in ("roas", "cpa", "cpc")]
+
+    issues = issues_for(medium_reply(["M6", *parents]), evidence)
+
+    assert any("without direct supporting evidence" in issue for issue in issues)
+
+
+def test_stable_metrics_are_not_direct_support():
+    evidence = evidence_for()
+
+    issues = issues_for(medium_reply(["M6", evidence.metric_fact_id("ctr")]), evidence)
+
+    assert any("without direct supporting evidence" in issue for issue in issues)
+
+
+def masked_medium_reply():
+    evidence = evidence_for(5)
+    reply = valid_reply(evidence)
+    reply["hypotheses"][0].update(
+        confidence="medium", evidence_ids=[evidence.metric_fact_id("cpm"), evidence.metric_fact_id("aov")]
+    )
+    return reply, evidence
+
+
+def test_a_separate_material_metric_allows_medium_confidence():
+    reply, evidence = masked_medium_reply()
+
+    assert issues_for(reply, evidence) == []
+
+
+def test_low_purchase_volume_forces_low_confidence():
+    reply, evidence = masked_medium_reply()
+    warned = replace(
+        evidence,
+        facts=(*evidence.facts, Fact("W9", "data_warning", "Treat results as directional.")),
+    )
+
+    issues = issues_for(reply, warned)
+
+    assert any("without direct supporting evidence" in issue for issue in issues)
+
+
+@pytest.mark.parametrize("field", ["if_confirmed_next_step", "if_not_confirmed_next_step"])
+def test_investigation_needs_both_next_steps(field):
+    issues = issues_for(edit(["recommendations", 0, field], "  "))
+
+    assert any("step is empty" in issue for issue in issues)
+
+
+def test_optimize_action_can_omit_next_steps():
+    reply = valid_reply()
+    reply["recommendations"][0].update(
+        action_type="optimize", if_confirmed_next_step="", if_not_confirmed_next_step=""
+    )
+
+    assert issues_for(reply) == []
+
+
+def test_next_steps_are_checked_like_other_text():
+    issues = issues_for(edit(["recommendations", 0, "if_confirmed_next_step"], "Cut spend by 40%."))
+
+    assert any("not in the evidence" in issue for issue in issues)
+
+
+@pytest.mark.parametrize(
+    "field, text, data",
+    [
+        ("action", "Check ad frequency by campaign.", "frequency"),
+        ("action", "Review ad-level results.", "ad-level data"),
+        ("action", "Review bounce rate by device.", "bounce rate"),
+        ("action", "Review competitor activity.", "competitor data"),
+        ("if_confirmed_next_step", "Check whether seasonal demand changed.", "seasonality data"),
+        ("expected_impact", "Reach data would show the audience size.", "reach"),
+    ],
+)
+def test_unavailable_data_must_be_listed_as_needed(field, text, data):
+    reply = edit(["recommendations", 0, field], text)
+    reply["additional_information"] = [
+        {"information": "Budget history.", "reason": "It gives context.", "evidence_ids": ["G1"]}
+    ]
+    reply["recommendations"][0]["action"] = (
+        text if field == "action" else "Review delivery by campaign."
+    )
+
+    assert any(f"relies on {data}" in issue for issue in issues_for(reply))
+
+
+def test_listed_data_can_be_recommended():
+    reply = edit(["recommendations", 0, "action"], "Check ad frequency by campaign.")
+    reply["additional_information"][0]["information"] = "Placement, audience and frequency data."
+
+    assert issues_for(reply) == []
+
+
+def test_available_campaign_review_needs_no_extra_data():
+    reply = edit(["recommendations", 0, "action"], "Compare CPM for each campaign.")
+    reply["additional_information"] = []
+
+    assert issues_for(reply) == []
+
+
+def test_reach_as_an_everyday_verb_is_not_flagged():
+    reply = edit(["recommendations", 0, "action"], "Check whether costs reach the prior level.")
+    reply["additional_information"] = []
+
+    assert issues_for(reply) == []
+
+
+def test_next_steps_appear_in_the_interface():
+    result = service.AIResult(AIDiagnosis.model_validate(valid_reply()), "Fake", "m", None, None)
+
+    html = render.ai_diagnosis_html(result, evidence_for())
+
+    assert "If confirmed" in html and "If not confirmed" in html
+
+
+def test_prompt_states_the_new_rules():
+    assert "mathematically explained by" in SYSTEM_PROMPT
+    assert "the root cause remains" in SYSTEM_PROMPT
+    assert "if_not_confirmed_next_step" in SYSTEM_PROMPT
 
 
 # Service

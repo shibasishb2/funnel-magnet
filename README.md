@@ -2,7 +2,7 @@
 
 AI Marketing Performance Diagnostic Agent: an ESCP MBA prototype that diagnoses changes in Meta Ads performance.
 
-**Status:** Stage 3 is ready for a real API connection. The AI layer is built and tested with mocked responses, but it has not yet called the live Gemini API. Report export and deployment are not built yet.
+**Status:** Stage 3 is built. One live Gemini test returned valid structured output, and the rules were then tightened using mocked tests. A live response has not yet passed validation end to end. Report export and deployment are not built yet.
 
 Use synthetic or anonymized data only.
 
@@ -66,13 +66,18 @@ Google's free-tier terms differ from its paid terms on how data may be used, so 
 
 `funnel_magnet/ai/evidence.py` builds the only input the model receives: calculated metrics, drivers, tree paths, data warnings and information gaps, each with a fact ID. CSV rows, campaign names and file names are never sent.
 
-`funnel_magnet/ai/validate.py` rejects the whole response if it cites an unknown or missing fact, contains a number that isn't in the evidence, names a metric that isn't in the evidence, or presents a cause as established. Hypotheses must stay on the diagnostic path, cite their own metric and be worded as possibilities. Confidence can only be low or medium.
+`funnel_magnet/ai/validate.py` rejects the whole response if it cites an unknown or missing fact, contains a number that isn't in the evidence, names a metric that isn't in the evidence, or presents a cause as established. Hypotheses must stay on the diagnostic path, cite their own metric and be worded as possibilities.
+
+- Links between metrics must be described as arithmetic, such as "mathematically explained by". Statements such as "the root cause remains unknown" are allowed, but claiming a root cause is established is not.
+- Confidence is low unless a hypothesis cites a separate lowest-level metric that moved materially. Medium is the highest level, and a low purchase volume warning forces low.
+- Every investigation must say what to do if the hypothesis is confirmed and if it is not.
+- A recommendation that relies on data the app doesn't have, such as frequency or placement data, must list that data as additional information needed.
 
 To use another provider, add a class with `generate()` to `funnel_magnet/ai/providers.py` and return it from `create_provider()` in `funnel_magnet/ai/service.py`.
 
 ### Limitations
 
-- Tests use mocked responses, so the live API, its schema handling and real response quality are unverified until a key is added.
+- Automated tests use mocked responses. Response quality and acceptance rates on the live API still need testing.
 - The validator uses rules and word patterns, so it can reject a sound response or miss an unusual unsupported claim. A number that happens to match the evidence also passes.
 - Rejected responses aren't retried automatically, because each attempt uses quota.
 - AI output is a suggestion for a person to review. The app never changes an ad account.

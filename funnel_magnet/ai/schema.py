@@ -26,6 +26,8 @@ class Recommendation(BaseModel):
     target_metric: str
     expected_direction: Direction
     expected_impact: str
+    if_confirmed_next_step: str
+    if_not_confirmed_next_step: str
     evidence_ids: list[str]
 
 

@@ -48,8 +48,14 @@ def upload(app, text):
 
 
 @pytest.fixture(autouse=True)
-def no_real_key(monkeypatch):
+def no_live_calls(monkeypatch):
+    """Keep tests independent of any real key, and fail if one tries to use the API."""
+
+    def blocked(settings):
+        raise AssertionError("A test tried to create a real provider.")
+
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.setattr(service, "create_provider", blocked)
 
 
 class CountingProvider:
@@ -100,10 +106,18 @@ def good_reply():
                     "target_metric": "cpm",
                     "expected_direction": "decrease",
                     "expected_impact": "Lower costs would support ROAS.",
+                    "if_confirmed_next_step": "Move budget to lower-cost delivery.",
+                    "if_not_confirmed_next_step": "Compare each campaign.",
                     "evidence_ids": [cpm],
                 }
             ],
-            "additional_information": [],
+            "additional_information": [
+                {
+                    "information": "Placement delivery data.",
+                    "reason": "It would show where costs changed.",
+                    "evidence_ids": [cpm],
+                }
+            ],
             "confidence_explanation": "Confidence is low.",
         }
     )
@@ -128,7 +142,10 @@ def test_app_opens_on_a_sample_without_errors():
     ]
 
 
-def test_without_a_key_the_button_is_off_and_the_dashboard_works():
+def test_without_a_key_the_button_is_off_and_the_dashboard_works(monkeypatch):
+    load_settings = service.load_settings
+    monkeypatch.setattr(service, "load_settings", lambda secrets=None: load_settings({}))
+
     app = start()
 
     assert generate_button(app).disabled
