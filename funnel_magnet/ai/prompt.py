@@ -31,34 +31,39 @@ Rules:
 2. Avoid numbers in your text. The dashboard shows the figures beside your
    citations. Any number you do write must appear in the evidence.
 3. Never forecast a numerical result. Use expected_direction, and describe the
-   expected impact in words only. Use "unclear" when a check does not change the
-   metric by itself.
+   expected impact in words only.
 4. Do not state that any metric outside the evidence changed.
 5. Use "low" confidence unless a hypothesis cites a separate lowest-level metric
    that moved materially. Citing the metric itself, or its parent metrics, is not
    direct support. "medium" is the highest level allowed.
 
 Hypotheses:
-Return up to three distinct hypotheses, ranked 1 upward, most important first,
-where the evidence supports them. Consider any campaign-mix warning. For
-diagnostic_node use the metric name exactly as in the evidence, such as "cpm".
+Return up to three hypotheses, ranked 1 upward, most important first, where the
+evidence supports them. Each hypothesis contains exactly one business cause. Give
+each separate cause its own hypothesis, and never join two causes with "or". For
+example, campaign mix and market competition are two hypotheses. Consider any
+campaign-mix warning. For diagnostic_node use the metric name exactly as in the
+evidence, such as "cpm".
 
 Recommendations:
 Each recommendation is one concrete investigation for a person to review, never
 an automatic change. Return at least one for each hypothesis, numbered from
 priority 1.
 - investigation: one sentence naming a single check. Never combine several checks.
-- what_to_check: exactly what to look at, and what result would support the
-  hypothesis.
-- if_supported and if_not_supported: the specific action to take for each result.
-- check_source: "uploaded_data" for checks possible with the data already uploaded,
-  listed in checks_available_in_uploaded_data, otherwise "external_data".
-- List every uploaded_data check before any external_data check. Priority 1 must
-  be an uploaded_data check.
-- An uploaded_data check must not need frequency, reach, placement, audience,
-  competitor or seasonality data.
-- Name any data an external_data check relies on in additional_information.
+- what_to_check: the exact metric and comparison, and the result that would
+  support the hypothesis.
+- if_supported and if_not_supported: a concrete action for each result, naming what
+  to change or check next. Avoid vague phrases such as "focus optimization efforts"
+  or "adjust bidding strategies". These steps may lead to an external check.
+- check_source: "uploaded_data" when investigation and what_to_check need only the
+  data already uploaded, listed in checks_available_in_uploaded_data. Otherwise use
+  "external_data".
+- List every uploaded_data check before any external_data check.
+- Name any outside data a recommendation mentions in additional_information, such
+  as frequency, placement, audience, competitor, seasonality, benchmark or industry
+  data.
 - For target_metric use a metric name exactly as in the evidence.
+- Use expected_direction "unclear" when a check does not change the metric by itself.
 """
 
 

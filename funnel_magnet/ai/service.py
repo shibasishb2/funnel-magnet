@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from pydantic import ValidationError
 
+from funnel_magnet.ai.normalize import normalize_diagnosis
 from funnel_magnet.ai.prompt import SYSTEM_PROMPT, build_user_prompt
 from funnel_magnet.ai.providers import AIError, AIResponseError, GeminiProvider
 from funnel_magnet.ai.schema import AIDiagnosis
@@ -48,6 +49,7 @@ class AIResult:
     model: str
     input_tokens: int | None
     output_tokens: int | None
+    notes: tuple[str, ...] | list[str] = ()
 
 
 def load_settings(secrets=None):
@@ -79,12 +81,13 @@ def generate_diagnosis(evidence, provider):
     except ValidationError:
         raise AIResponseError("The AI response did not match the required format.") from None
 
+    diagnosis, notes = normalize_diagnosis(diagnosis, evidence)
     issues = validate_diagnosis(diagnosis, evidence)
     if issues:
         raise AIResponseError("The AI response was rejected because it failed the evidence checks.", issues)
 
     return AIResult(
-        diagnosis, provider.name, provider.model, response.input_tokens, response.output_tokens
+        diagnosis, provider.name, provider.model, response.input_tokens, response.output_tokens, notes
     )
 
 

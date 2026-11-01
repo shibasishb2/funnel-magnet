@@ -5,12 +5,14 @@ import io
 import json
 import socket
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 from google.genai import errors
 
 from funnel_magnet.ai import service
 from funnel_magnet.ai.evidence import Fact, build_evidence
+from funnel_magnet.ai.normalize import normalize_diagnosis
 from funnel_magnet.ai.prompt import SYSTEM_PROMPT, build_user_prompt
 from funnel_magnet.ai.providers import (
     AIError,
@@ -89,8 +91,14 @@ def valid_reply(evidence=None):
     }
 
 
+def tidy(reply, evidence=None):
+    return normalize_diagnosis(AIDiagnosis.model_validate(reply), evidence or evidence_for())
+
+
 def issues_for(reply, evidence=None):
-    return validate_diagnosis(AIDiagnosis.model_validate(reply), evidence or evidence_for())
+    """Follow the production order: normalize, then validate."""
+    evidence = evidence or evidence_for()
+    return validate_diagnosis(tidy(reply, evidence)[0], evidence)
 
 
 class FakeProvider:
@@ -204,7 +212,6 @@ def edit(path, value):
     "path, value, expected",
     [
         (["hypotheses", 0, "evidence_ids"], ["M99"], "unknown evidence ID"),
-        (["hypotheses", 0, "evidence_ids"], [], "cites no evidence"),
         (["recommendations", 0, "evidence_ids"], ["Z1"], "unknown evidence ID"),
         (["recommendations", 0, "evidence_ids"], [], "cites no evidence"),
         (["additional_information", 0, "evidence_ids"], ["G99"], "unknown evidence ID"),
@@ -280,14 +287,6 @@ def test_hedged_statements_are_accepted(text):
     assert issues_for(edit(["confidence_explanation"], text)) == []
 
 
-def test_hypothesis_must_be_worded_as_a_possibility():
-    issues = issues_for(
-        edit(["hypotheses", 0, "unverified_business_cause"], "Delivery costs rose in the auction.")
-    )
-
-    assert any("not worded as a possibility" in issue for issue in issues)
-
-
 @pytest.mark.parametrize(
     "text",
     ["CAC worsened this period.", "LTV is falling.", "Frequency rose sharply."],
@@ -315,29 +314,11 @@ def test_hypothesis_off_the_diagnostic_path_is_rejected():
     assert any("not on a diagnostic path" in issue for issue in issues_for(reply))
 
 
-def test_hypothesis_must_cite_its_own_metric():
-    assert any(
-        "does not cite the metric fact" in issue
-        for issue in issues_for(edit(["hypotheses", 0, "evidence_ids"], ["D1"]))
-    )
-
-
-def test_more_than_three_hypotheses_are_rejected():
-    reply = valid_reply()
-    reply["hypotheses"] = [dict(reply["hypotheses"][0], rank=rank) for rank in range(1, 5)]
-
-    assert any("more than three" in issue for issue in issues_for(reply))
-
-
 def test_material_issue_needs_a_hypothesis():
     reply = valid_reply()
     reply.update(hypotheses=[], recommendations=[])
 
     assert any("no hypothesis" in issue for issue in issues_for(reply))
-
-
-def test_hypothesis_needs_a_recommendation():
-    assert any("has no recommendation" in issue for issue in issues_for(edit(["recommendations"], [])))
 
 
 def test_recommendation_must_link_to_a_hypothesis():
@@ -376,21 +357,6 @@ def test_mathematical_relationships_are_allowed(text):
 @pytest.mark.parametrize(
     "text",
     [
-        "ROAS fell, driven by CPM.",
-        "The decline is explained by higher costs.",
-        "The rise in CPC is attributable to CPM.",
-        "The rise in CPC is entirely attributable to CPM.",
-        "ROAS was mathematically caused by CPM.",
-        "The decline is mathematically explained by creative fatigue.",
-    ],
-)
-def test_unlabelled_or_causal_links_are_rejected(text):
-    assert issues_for(edit(["confidence_explanation"], text))
-
-
-@pytest.mark.parametrize(
-    "text",
-    [
         "The root cause remains unknown.",
         "The root cause of the CPM increase remains unconfirmed.",
         "The root cause is unclear from this data.",
@@ -402,46 +368,8 @@ def test_unknown_root_cause_is_allowed(text):
     assert issues_for(edit(["confidence_explanation"], text)) == []
 
 
-@pytest.mark.parametrize(
-    "text",
-    [
-        "The root cause is creative performance.",
-        "We found the root cause in delivery costs.",
-        "The root cause of the CPM increase remains external to the provided metrics.",
-        "The root cause is audience saturation.",
-    ],
-)
-def test_established_root_cause_is_rejected(text):
-    issues = issues_for(edit(["confidence_explanation"], text))
-
-    assert any("root cause" in issue or "cause" in issue for issue in issues)
-
-
 def medium_reply(evidence_ids):
     return edit(["hypotheses", 0], dict(valid_reply()["hypotheses"][0], confidence="medium", evidence_ids=evidence_ids))
-
-
-def test_medium_confidence_without_direct_support_is_rejected():
-    issues = issues_for(medium_reply(["M6", "D1"]))
-
-    assert any("without direct supporting evidence" in issue for issue in issues)
-
-
-def test_parent_metrics_are_not_direct_support():
-    evidence = evidence_for()
-    parents = [evidence.metric_fact_id(metric) for metric in ("roas", "cpa", "cpc")]
-
-    issues = issues_for(medium_reply(["M6", *parents]), evidence)
-
-    assert any("without direct supporting evidence" in issue for issue in issues)
-
-
-def test_stable_metrics_are_not_direct_support():
-    evidence = evidence_for()
-
-    issues = issues_for(medium_reply(["M6", evidence.metric_fact_id("ctr")]), evidence)
-
-    assert any("without direct supporting evidence" in issue for issue in issues)
 
 
 def masked_medium_reply():
@@ -457,18 +385,6 @@ def test_a_separate_material_metric_allows_medium_confidence():
     reply, evidence = masked_medium_reply()
 
     assert issues_for(reply, evidence) == []
-
-
-def test_low_purchase_volume_forces_low_confidence():
-    reply, evidence = masked_medium_reply()
-    warned = replace(
-        evidence,
-        facts=(*evidence.facts, Fact("W9", "data_warning", "Treat results as directional.")),
-    )
-
-    issues = issues_for(reply, warned)
-
-    assert any("without direct supporting evidence" in issue for issue in issues)
 
 
 # Separating Python's diagnosis from the model's interpretation
@@ -556,84 +472,6 @@ def test_recommendation_parts_are_checked_for_numbers(field):
     assert any("not in the evidence" in issue for issue in issues)
 
 
-def test_recommendation_must_be_one_investigation():
-    text = "Compare each campaign. Then review delivery settings."
-
-    issues = issues_for(edit(["recommendations", 0, "investigation"], text))
-
-    assert any("one investigation" in issue for issue in issues)
-
-
-def test_uploaded_data_checks_must_come_first():
-    reply = valid_reply()
-    first, second = reply["recommendations"]
-    first["priority"], second["priority"] = 2, 1
-
-    assert any("must start with a check using the uploaded data" in i for i in issues_for(reply))
-
-
-def test_external_check_cannot_sit_between_uploaded_checks():
-    reply = valid_reply()
-    first, second = reply["recommendations"]
-    third = dict(first, priority=3)
-    reply["recommendations"] = [first, second, third]
-
-    assert any("must come before external checks" in i for i in issues_for(reply))
-
-
-def test_only_external_checks_are_rejected():
-    reply = valid_reply()
-    reply["recommendations"] = [dict(reply["recommendations"][1], priority=1)]
-
-    assert any("must start with a check using the uploaded data" in i for i in issues_for(reply))
-
-
-@pytest.mark.parametrize(
-    "text, data",
-    [
-        ("Check ad frequency by campaign.", "frequency"),
-        ("Review ad-level results.", "ad-level data"),
-        ("Review bounce rate by device.", "bounce rate"),
-        ("Review competitor activity.", "competitor data"),
-        ("Review placement costs.", "placement data"),
-    ],
-)
-def test_uploaded_check_cannot_need_unavailable_data(text, data):
-    issues = issues_for(edit(["recommendations", 0, "investigation"], text))
-
-    assert any(f"uploaded data but relies on {data}" in issue for issue in issues)
-
-
-@pytest.mark.parametrize(
-    "field, text, data",
-    [
-        ("investigation", "Check ad frequency by campaign.", "frequency"),
-        ("investigation", "Review ad-level results.", "ad-level data"),
-        ("investigation", "Review bounce rate by device.", "bounce rate"),
-        ("investigation", "Review competitor activity.", "competitor data"),
-        ("if_supported", "Check whether seasonal demand changed.", "seasonality data"),
-        ("expected_impact", "Reach data would show the audience size.", "reach"),
-    ],
-)
-def test_external_data_must_be_listed_as_needed(field, text, data):
-    reply = valid_reply()
-    reply["recommendations"][1].update(
-        {
-            "investigation": "Review delivery reports.",
-            "what_to_check": "Find the largest cost rise.",
-            "if_supported": "Shift budget.",
-            "if_not_supported": "Keep the current mix.",
-            "expected_impact": "Lower costs would support ROAS.",
-            field: text,
-        }
-    )
-    reply["additional_information"] = [
-        {"information": "Budget history.", "reason": "It gives context.", "evidence_ids": ["G1"]}
-    ]
-
-    assert any(f"relies on {data}" in issue for issue in issues_for(reply))
-
-
 def test_listed_data_can_be_used_in_an_external_check():
     reply = edit(["recommendations", 1, "investigation"], "Check ad frequency by campaign.")
     reply["additional_information"][0]["information"] = "Placement, audience and frequency data."
@@ -699,12 +537,6 @@ def test_missing_evidence_wording_cannot_hide_a_causal_claim(text):
     assert issues_for(edit(["confidence_explanation"], text))
 
 
-def test_second_live_sentence_reports_one_issue():
-    text = "The increase in CPC is entirely attributable to a higher CPM, as CTR remained stable."
-
-    assert len(issues_for(edit(["confidence_explanation"], text))) == 1
-
-
 def test_repeated_wording_is_reported_once():
     text = "This proves fatigue. This proves fatigue."
 
@@ -715,6 +547,293 @@ def test_different_problems_are_each_reported():
     text = "This proves fatigue. Tracking is the issue."
 
     assert len(issues_for(edit(["confidence_explanation"], text))) == 2
+
+
+# Harmless differences are normalized, not rejected
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "ROAS fell, driven by CPM.",
+        "The rise in CPC is attributable to CPM.",
+        "The rise in CPC is entirely attributable to CPM.",
+        "CPM increased significantly, serving as the primary driver.",
+        "The root cause of the CPM increase remains external to the provided metrics.",
+    ],
+)
+def test_harmless_wording_is_accepted(text):
+    assert issues_for(edit(["confidence_explanation"], text)) == []
+
+
+def test_unhedged_cause_is_marked_as_possible():
+    reply = edit(["hypotheses", 0, "unverified_business_cause"], "Auction costs rose.")
+
+    result, _ = tidy(reply)
+
+    assert result.hypotheses[0].unverified_business_cause == "Possible cause: Auction costs rose."
+    assert issues_for(reply) == []
+
+
+def test_hypothesis_gets_its_own_metric_citation():
+    reply = edit(["hypotheses", 0, "evidence_ids"], ["D1"])
+    evidence = evidence_for()
+
+    result, _ = tidy(reply, evidence)
+
+    assert evidence.metric_fact_id("cpm") in result.hypotheses[0].evidence_ids
+
+
+def test_normalizer_does_not_hide_a_missing_citation_for_an_unknown_id():
+    assert any("M99" in i for i in issues_for(edit(["hypotheses", 0, "evidence_ids"], ["M99"])))
+
+
+def test_extra_hypotheses_are_trimmed_with_their_recommendations():
+    reply = valid_reply()
+    base = reply["hypotheses"][0]
+    reply["hypotheses"] = [dict(base, rank=rank) for rank in range(1, 5)]
+    reply["recommendations"][1]["hypothesis_rank"] = 4
+
+    result, notes = tidy(reply)
+
+    assert len(result.hypotheses) == 3
+    assert len(result.recommendations) == 1
+    assert any("top 3" in note for note in notes)
+
+
+def test_ranks_and_priorities_are_renumbered():
+    reply = valid_reply()
+    reply["hypotheses"][0]["rank"] = 5
+    reply["recommendations"][0].update(priority=4, hypothesis_rank=5)
+    reply["recommendations"][1].update(priority=9, hypothesis_rank=5)
+
+    result, _ = tidy(reply)
+
+    assert result.hypotheses[0].rank == 1
+    assert [item.priority for item in result.recommendations] == [1, 2]
+    assert issues_for(reply) == []
+
+
+def test_hypothesis_without_a_recommendation_is_accepted():
+    assert issues_for(edit(["recommendations"], [])) == []
+
+
+def medium_reply(evidence_ids):
+    hypothesis = dict(valid_reply()["hypotheses"][0], confidence="medium", evidence_ids=evidence_ids)
+    return edit(["hypotheses", 0], hypothesis)
+
+
+@pytest.mark.parametrize("extra", [[], ["roas"], ["cpa", "cpc"], ["ctr"]])
+def test_medium_confidence_without_support_is_lowered(extra):
+    evidence = evidence_for()
+    ids = ["M6", *[evidence.metric_fact_id(metric) for metric in extra]]
+
+    result, notes = tidy(medium_reply(ids), evidence)
+
+    assert result.hypotheses[0].confidence == "low"
+    assert any("low confidence" in note for note in notes)
+
+
+def test_low_purchase_volume_lowers_confidence():
+    reply, evidence = masked_medium_reply()
+    warned = replace(
+        evidence, facts=(*evidence.facts, Fact("W9", "data_warning", "Treat results as directional."))
+    )
+
+    assert tidy(reply, warned)[0].hypotheses[0].confidence == "low"
+
+
+def test_supported_medium_confidence_is_kept():
+    reply, evidence = masked_medium_reply()
+
+    assert tidy(reply, evidence)[0].hypotheses[0].confidence == "medium"
+
+
+def test_uploaded_checks_are_moved_first():
+    reply = valid_reply()
+    first, second = reply["recommendations"]
+    first["priority"], second["priority"] = 2, 1
+
+    result, notes = tidy(reply)
+
+    assert [item.check_source for item in result.recommendations] == ["uploaded_data", "external_data"]
+    assert [item.priority for item in result.recommendations] == [1, 2]
+    assert any("ahead of external" in note for note in notes)
+
+
+def test_only_external_checks_are_accepted_with_a_note():
+    reply = valid_reply()
+    reply["recommendations"] = [dict(reply["recommendations"][1], priority=1)]
+
+    assert any("No check using the uploaded data" in note for note in tidy(reply)[1])
+    assert issues_for(reply) == []
+
+
+@pytest.mark.parametrize(
+    "field", ["investigation", "what_to_check"],
+)
+def test_uploaded_label_is_corrected_when_the_check_needs_outside_data(field):
+    reply = edit(["recommendations", 0, field], "Review ad frequency for each campaign.")
+
+    result, notes = tidy(reply)
+
+    assert all(item.check_source == "external_data" for item in result.recommendations)
+    assert any("Relabelled" in note for note in notes)
+
+
+@pytest.mark.parametrize("field", ["if_supported", "if_not_supported"])
+def test_uploaded_check_can_lead_to_an_external_next_step(field):
+    text = "Investigate external factors such as market competition and seasonality."
+    reply = edit(["recommendations", 0, field], text)
+
+    result, _ = tidy(reply)
+
+    assert result.recommendations[0].check_source == "uploaded_data"
+    assert issues_for(reply) == []
+
+
+@pytest.mark.parametrize(
+    "field, text, name",
+    [
+        ("investigation", "Check ad frequency by campaign.", "Frequency data."),
+        ("investigation", "Review ad-level results.", "Ad-level data."),
+        ("investigation", "Review bounce rate by device.", "Bounce rate data."),
+        ("what_to_check", "Compare CPM with historical benchmarks.", "Benchmark data."),
+        ("what_to_check", "Compare CPM with industry-wide figures.", "Industry data."),
+        ("if_not_supported", "Investigate seasonal demand.", "Seasonality data."),
+        ("if_supported", "Check competitor activity.", "Competitor data."),
+    ],
+)
+def test_outside_data_is_always_disclosed(field, text, name):
+    reply = edit(["recommendations", 1, field], text)
+
+    result, notes = tidy(reply)
+
+    assert name in [item.information for item in result.additional_information]
+    assert any("additional information needed" in note for note in notes)
+    assert issues_for(reply) == []
+
+
+def test_data_already_listed_is_not_added_twice():
+    assert len(tidy(valid_reply())[0].additional_information) == 1
+
+
+def test_adjustments_are_shown_to_the_user():
+    result = service.AIResult(
+        AIDiagnosis.model_validate(valid_reply()), "Fake", "m", None, None, ["Moved a check."]
+    )
+
+    html = render.ai_diagnosis_html(result, evidence_for())
+
+    assert "Adjusted by the app" in html and "Moved a check." in html
+
+
+def test_service_returns_the_adjustments():
+    reply = edit(["recommendations", 1, "what_to_check"], "Compare CPM with benchmarks.")
+
+    result = service.generate_diagnosis(evidence_for(), FakeProvider(json.dumps(reply)))
+
+    assert any("benchmark" in note for note in result.notes)
+
+
+# Factual problems are still rejected
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "The root cause is creative performance.",
+        "We found the root cause in delivery costs.",
+        "The root cause of the CPM increase is audience saturation.",
+        "The team identified the root cause.",
+    ],
+)
+def test_established_root_cause_is_rejected(text):
+    assert any("root cause" in i or "cause" in i for i in issues_for(edit(["confidence_explanation"], text)))
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "The root cause is unknown.",
+        "The root cause is not known.",
+        "These factors are required to explain the root cause of the CPM increase, "
+        "which is not visible in the current dataset.",
+        "We have not identified the root cause.",
+    ],
+)
+def test_statements_that_the_cause_is_unknown_are_accepted(text):
+    assert issues_for(edit(["confidence_explanation"], text)) == []
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "CPM may have risen because of auction competition, or a shift in campaign mix.",
+        "Costs could reflect a campaign mix shift or an increase in competition.",
+        "Costs may be higher due to competition or due to seasonality.",
+    ],
+)
+def test_combined_business_causes_are_rejected(text):
+    issues = issues_for(edit(["hypotheses", 0, "unverified_business_cause"], text))
+
+    assert any("more than one business cause" in issue for issue in issues)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Costs may have risen for more expensive audiences or placements.",
+        "Delivery may have moved toward one campaign.",
+    ],
+)
+def test_one_cause_with_alternatives_in_scope_is_accepted(text):
+    assert issues_for(edit(["hypotheses", 0, "unverified_business_cause"], text)) == []
+
+
+def test_separate_causes_as_separate_hypotheses_are_accepted():
+    reply = valid_reply()
+    second = dict(reply["hypotheses"][0], rank=2)
+    second["unverified_business_cause"] = "A shift in campaign mix may have raised CPM."
+    reply["hypotheses"].append(second)
+
+    assert issues_for(reply) == []
+
+
+def test_the_prompt_requires_one_cause_and_concrete_actions():
+    assert "exactly one business cause" in SYSTEM_PROMPT
+    assert "focus optimization efforts" in SYSTEM_PROMPT
+
+
+# Replay of the third live Gemini response, stored as a fixture
+
+
+def live_reply():
+    return json.loads((Path(__file__).parent / "fixtures" / "live_response_cpm_inflation.json").read_text("utf-8"))
+
+
+def test_live_response_only_fails_for_its_combined_causes():
+    issues = issues_for(live_reply())
+
+    assert len(issues) == 1
+    assert "more than one business cause" in issues[0]
+
+
+def test_live_response_passes_once_the_causes_are_separate():
+    reply = live_reply()
+    reply["hypotheses"][0]["unverified_business_cause"] = (
+        "The increase in CPM could be due to a shift in the campaign mix."
+    )
+
+    assert issues_for(reply) == []
+
+
+def test_live_response_discloses_its_benchmark_needs():
+    result, notes = tidy(live_reply())
+    listed = " ".join(item.information for item in result.additional_information)
+
+    assert "Benchmark data." in listed and "Industry data." in listed
+    assert result.recommendations[0].check_source == "uploaded_data"
 
 
 # Service

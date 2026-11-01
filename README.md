@@ -2,7 +2,7 @@
 
 AI Marketing Performance Diagnostic Agent: an ESCP MBA prototype that diagnoses changes in Meta Ads performance.
 
-**Status:** Stage 3 is built. Two live Gemini tests returned valid structured output, but neither passed validation. The design was then changed so Python writes the mathematical diagnosis, and this version has only been tested with mocked responses. Report export and deployment are not built yet.
+**Status:** Stage 3 is built. Three live Gemini tests returned valid structured output, but none passed validation. Python now writes the mathematical diagnosis, and a normalizer handles harmless differences. This latest version has only been tested with mocked responses and a stored live response. Report export and deployment are not built yet.
 
 Use synthetic or anonymized data only.
 
@@ -68,13 +68,15 @@ Python writes the mathematical diagnosis from the decision tree and contribution
 
 `funnel_magnet/ai/evidence.py` builds the only input the model receives: the mathematical diagnosis, calculated metrics, drivers, tree paths, data warnings, information gaps and the checks available in the uploaded data, with fact IDs on every fact. CSV rows, campaign names and file names are never sent.
 
-`funnel_magnet/ai/validate.py` rejects the whole response if it cites an unknown or missing fact, contains a number that isn't in the evidence, names a metric that isn't in the evidence, or presents a cause as established. Hypotheses must stay on the diagnostic path, cite their own metric and keep mathematical evidence apart from the unverified business cause, which must be worded as a possibility.
+`funnel_magnet/ai/validate.py` rejects the whole response if it cites an unknown or missing fact, contains a number that isn't in the evidence, names a metric that isn't in the evidence, or presents a cause as established. Hypotheses must stay on the diagnostic path, keep mathematical evidence apart from the unverified business cause, and hold one business cause each. Statements that a cause is unknown, or that evidence is missing, are allowed. Each wording problem is reported once per sentence.
 
-- Links between metrics must be described as arithmetic, such as "mathematically explained by". Statements such as "the root cause remains unknown" are allowed, and so are statements about missing evidence, but claiming a root cause is established is not.
-- Confidence is low unless a hypothesis cites a separate lowest-level metric that moved materially. Medium is the highest level, and a low purchase volume warning forces low.
-- Each recommendation is one investigation, stating what to check and what to do if the hypothesis is supported or not.
-- Checks using the uploaded data must come first, and they can't rely on data the app doesn't have. External checks must list the data they need as additional information needed.
-- Each wording problem is reported once per sentence.
+`funnel_magnet/ai/normalize.py` runs first and fixes harmless differences, listing each change under "Adjusted by the app":
+
+- Keeps the top three hypotheses, and renumbers hypotheses and recommendations.
+- Adds a hypothesis's own metric to its citations, and marks an unhedged business cause as possible.
+- Lowers confidence to low unless a hypothesis cites a separate lowest-level metric that moved materially, and forces low when purchase volume is low.
+- Relabels a check as external if it needs outside data, and moves checks using the uploaded data first.
+- Adds any outside data named in a recommendation, including benchmark and industry data, to the additional information needed. Next steps may lead to external checks, because that data is then disclosed.
 
 To use another provider, add a class with `generate()` to `funnel_magnet/ai/providers.py` and return it from `create_provider()` in `funnel_magnet/ai/service.py`.
 
@@ -82,6 +84,7 @@ To use another provider, add a class with `generate()` to `funnel_magnet/ai/prov
 
 - Automated tests use mocked responses. Response quality and acceptance rates on the live API still need testing.
 - The validator uses rules and word patterns, so it can reject a sound response or miss an unusual unsupported claim. A number that happens to match the evidence also passes.
+- The check for two causes in one hypothesis looks for joining patterns, so some combined causes can pass. Whether actions are concrete is requested in the prompt, not enforced.
 - Rejected responses aren't retried automatically, because each attempt uses quota.
 - AI output is a suggestion for a person to review. The app never changes an ad account.
 

@@ -1,0 +1,60 @@
+{
+  "hypotheses": [
+    {
+      "rank": 1,
+      "diagnostic_node": "cpm",
+      "mathematical_evidence": "CPM increased significantly, serving as the primary driver for the decline in ROAS.",
+      "unverified_business_cause": "The increase in CPM could be due to a shift in the campaign mix toward more expensive audiences or placements, or an increase in external competitive pressure.",
+      "evidence_ids": [
+        "M6",
+        "D1"
+      ],
+      "confidence": "low",
+      "uncertainty": "The root cause of the CPM increase remains unknown as the data does not isolate specific campaign performance or external market factors."
+    }
+  ],
+  "recommendations": [
+    {
+      "priority": 1,
+      "hypothesis_rank": 1,
+      "check_source": "uploaded_data",
+      "investigation": "Analyze individual campaign performance to determine if the CPM increase is isolated to specific campaigns or widespread.",
+      "what_to_check": "Review CPM trends for each campaign individually to see if the increase is driven by a single campaign or a shift in spend toward higher-cost campaigns.",
+      "if_supported": "Focus optimization efforts on the specific campaigns showing the highest CPM increases.",
+      "if_not_supported": "Investigate external factors such as market competition or seasonality.",
+      "target_metric": "cpm",
+      "expected_direction": "stabilize",
+      "expected_impact": "Stabilizing the CPM would reduce the CPA and improve the overall ROAS.",
+      "evidence_ids": [
+        "M6",
+        "W2"
+      ]
+    },
+    {
+      "priority": 2,
+      "hypothesis_rank": 1,
+      "check_source": "external_data",
+      "investigation": "Assess external market conditions to identify if the CPM increase aligns with broader industry trends.",
+      "what_to_check": "Compare current CPM against historical benchmarks and industry-wide data for the same period.",
+      "if_supported": "Adjust bidding strategies to account for the higher cost environment.",
+      "if_not_supported": "Re-evaluate internal campaign settings and targeting strategies.",
+      "target_metric": "cpm",
+      "expected_direction": "stabilize",
+      "expected_impact": "Aligning bidding strategies with market realities will help maintain efficient spend.",
+      "evidence_ids": [
+        "M6",
+        "G1"
+      ]
+    }
+  ],
+  "additional_information": [
+    {
+      "information": "Competitor activity, seasonality, and audience and placement delivery data.",
+      "reason": "These factors are required to explain the root cause of the CPM increase, which is not visible in the current dataset.",
+      "evidence_ids": [
+        "G1"
+      ]
+    }
+  ],
+  "confidence_explanation": "Confidence is low because the primary driver, CPM, is an aggregate metric. Without isolating individual campaign performance or external market data, it is impossible to definitively attribute the cause to internal strategy shifts versus external market forces."
+}

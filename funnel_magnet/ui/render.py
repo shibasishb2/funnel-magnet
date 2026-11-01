@@ -141,6 +141,15 @@ def _information_html(items, evidence):
     return f'<div class="fm-ai-heading">Additional information needed</div>{rows}'
 
 
+def _adjustments_html(notes):
+    if not notes:
+        return ""
+    return (
+        '<div class="fm-ai-heading">Adjusted by the app</div>'
+        f'<ul class="fm-panel-note">{_items(notes)}</ul>'
+    )
+
+
 def ai_diagnosis_html(result, evidence):
     diagnosis = result.diagnosis
     hypotheses = "".join(_hypothesis_html(item, evidence) for item in diagnosis.hypotheses)
@@ -161,7 +170,8 @@ def ai_diagnosis_html(result, evidence):
         + _information_html(diagnosis.additional_information, evidence)
         + '<div class="fm-ai-heading">Confidence and uncertainty</div>'
         f"<p>{escape(diagnosis.confidence_explanation)}</p>"
-        "</section>"
+        + _adjustments_html(result.notes)
+        + "</section>"
     )
 
 
