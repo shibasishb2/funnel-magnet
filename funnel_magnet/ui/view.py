@@ -232,6 +232,64 @@ def _observation(change, currency):
     return f"{label} {verb} {abs(change.pct_change):.1%}, from {prior} to {current}."
 
 
+def _changes_text(diagnosis, metrics):
+    return ", ".join(
+        f"{metric_label(metric)} ({format_change(diagnosis.changes[metric].pct_change)})"
+        for metric in metrics
+    )
+
+
+def _largest_driver(role, driver):
+    return (
+        f"The largest {role} driver is {metric_label(driver.metric)}, which contributed "
+        f"{driver.contribution:+.2f} to ROAS ({driver.weight:.0%} of all movement)."
+    )
+
+
+def mathematical_diagnosis(diagnosis, currency=None):
+    """Describe the tree result in sentences, written entirely from engine values."""
+    changes = diagnosis.changes
+    if not diagnosis.assessable:
+        return ["ROAS can't be compared because at least one period has no spend."]
+
+    nodes = {node for path in diagnosis.paths for node in path}
+    sentences = [_observation(changes["roas"], currency)]
+
+    if "aov" in nodes:
+        sentences.append(_observation(changes["aov"], currency))
+    if "cpa" in nodes:
+        sentences.append(
+            f"The CPA result is mathematically explained by {_changes_text(diagnosis, ('cpc', 'cvr'))}."
+        )
+    if "cpc" in nodes:
+        sentences.append(
+            f"The CPC result is mathematically explained by {_changes_text(diagnosis, ('cpm', 'ctr'))}."
+        )
+    declined = [metric for metric in rate_metrics(diagnosis) if metric in nodes]
+    if declined:
+        sentences.append(
+            f"The CVR result is mathematically explained by these funnel stages: "
+            f"{_changes_text(diagnosis, declined)}."
+        )
+
+    adverse, favorable = diagnosis.adverse_drivers, diagnosis.favorable_drivers
+    if diagnosis.drivers_undefined_reason:
+        sentences.append(
+            f"Contributions were not calculated. {humanize(diagnosis.drivers_undefined_reason)}"
+        )
+    elif adverse:
+        sentences.append(_largest_driver("adverse", adverse[0]))
+    if favorable and not diagnosis.drivers_undefined_reason:
+        sentences.append(_largest_driver("favorable", favorable[0]))
+    if nodes == {"roas"}:
+        sentences.append(
+            f"No branch needed investigation at the {format_threshold(diagnosis.threshold)} threshold."
+        )
+
+    sentences.append("This shows how ROAS changed arithmetically, not why.")
+    return sentences
+
+
 def _driver_sentence(driver):
     return (
         f"{metric_label(driver.metric)} contributed {driver.contribution:+.2f} to ROAS "

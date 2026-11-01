@@ -99,7 +99,8 @@ def _hypothesis_html(item, evidence):
     return (
         '<article class="fm-ai-card">'
         f'<div class="fm-ai-card-tag">Hypothesis {item.rank} · {escape(item.confidence.capitalize())} confidence</div>'
-        f"<p>{escape(item.statement)}</p>"
+        f"<p><strong>Mathematical evidence:</strong> {escape(item.mathematical_evidence)}</p>"
+        f"<p><strong>Unverified business cause:</strong> {escape(item.unverified_business_cause)}</p>"
         f'<p class="fm-panel-note">Uncertainty: {escape(item.uncertainty)}</p>'
         f"{_citations(item.evidence_ids, evidence)}"
         "</article>"
@@ -113,22 +114,17 @@ def _recommendation_html(item, evidence):
         "stabilize": "Stabilize",
         "unclear": "Unclear",
     }[item.expected_direction]
-    next_steps = "".join(
-        f'<p class="fm-panel-note">{label}: {escape(text)}</p>'
-        for label, text in (
-            ("If confirmed", item.if_confirmed_next_step),
-            ("If not confirmed", item.if_not_confirmed_next_step),
-        )
-        if text.strip()
-    )
+    source = "Uploaded data" if item.check_source == "uploaded_data" else "External data"
     return (
         '<article class="fm-ai-card">'
-        f'<div class="fm-ai-card-tag">Priority {item.priority} · {escape(item.action_type.capitalize())} '
+        f'<div class="fm-ai-card-tag">Priority {item.priority} · {source} '
         f"· Tests hypothesis {item.hypothesis_rank}</div>"
-        f"<p>{escape(item.action)}</p>"
+        f"<p><strong>{escape(item.investigation)}</strong></p>"
+        f"<p><strong>What to check:</strong> {escape(item.what_to_check)}</p>"
+        f"<p><strong>If supported:</strong> {escape(item.if_supported)}</p>"
+        f"<p><strong>If not supported:</strong> {escape(item.if_not_supported)}</p>"
         f'<p class="fm-panel-note">Expected direction for {escape(metric_label(item.target_metric))}: '
         f"{direction}. {escape(item.expected_impact)}</p>"
-        f"{next_steps}"
         f"{_citations(item.evidence_ids, evidence)}"
         "</article>"
     )
@@ -156,9 +152,6 @@ def ai_diagnosis_html(result, evidence):
         f'<div class="fm-panel-tag">AI-generated · {escape(result.provider)} {escape(result.model)}</div>'
         '<p class="fm-panel-note">Interpretation of the calculated evidence. Causes are not confirmed, '
         "and every action is a suggestion for you to review.</p>"
-        '<div class="fm-ai-heading">Executive diagnosis</div>'
-        f"<p>{escape(diagnosis.executive_diagnosis)}</p>"
-        f"{_citations(diagnosis.executive_evidence_ids, evidence)}"
         + (f'<div class="fm-ai-heading">AI-generated hypotheses</div>{hypotheses}' if hypotheses else "")
         + (
             f'<div class="fm-ai-heading">AI-generated recommendations</div>{recommendations}'
@@ -168,6 +161,15 @@ def ai_diagnosis_html(result, evidence):
         + _information_html(diagnosis.additional_information, evidence)
         + '<div class="fm-ai-heading">Confidence and uncertainty</div>'
         f"<p>{escape(diagnosis.confidence_explanation)}</p>"
+        "</section>"
+    )
+
+
+def mathematical_diagnosis_html(sentences):
+    return (
+        '<section class="fm-panel fm-confirmed">'
+        '<div class="fm-panel-tag">Calculated by Python</div>'
+        f"<p>{escape(' '.join(sentences))}</p>"
         "</section>"
     )
 

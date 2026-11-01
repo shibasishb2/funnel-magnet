@@ -35,6 +35,16 @@ ROOT_CAUSE_UNKNOWN = re.compile(
     r"not (?:yet )?(?:been )?(?:known|established|confirmed|proven))\b",
     re.IGNORECASE,
 )
+# "Lacks competitor data" reports a gap, so naming the missing data isn't a claim.
+MISSING_EVIDENCE = re.compile(
+    r"\b(lacks?|lacking|without|missing|unavailable|absent|does not (?:include|contain|show))\b"
+    r"[^.;]*\b(data|information|insights?|context|evidence|details?|metrics?|reports?)\b",
+    re.IGNORECASE,
+)
+ASSERTED_CAUSE = re.compile(
+    r"\b(?:is|are|was|were)\s+(?:the|a|an)?\s*(?:main\s+|likely\s+)?(?:cause|problem|reason|issue)\b",
+    re.IGNORECASE,
+)
 NAMED_CAUSES = re.compile(
     r"\b(fatigue|saturat\w+|auction pressure|competit\w+|seasonal\w*|tracking|pixel|"
     r"page speed|outage|bug)\b",
@@ -72,30 +82,37 @@ def _sentences(text):
     return [part for part in re.split(r"(?<=[.!?;])\s+", text) if part.strip()]
 
 
+def _reports_missing_evidence(sentence):
+    return bool(MISSING_EVIDENCE.search(sentence)) and not (
+        ASSERTED_CAUSE.search(sentence) or CAUSAL_CLAIMS.search(sentence)
+    )
+
+
+def _sentence_problem(sentence):
+    """Return the first problem in a sentence, so one wording issue is reported once."""
+    hedged = bool(HEDGES.search(sentence))
+    if PROOF_CLAIMS.search(sentence) and not NEGATION.search(sentence):
+        return "presents a conclusion as proven."
+    if CAUSAL_CLAIMS.search(sentence) and not hedged:
+        return "states a cause as fact."
+    if ATTRIBUTION_CLAIMS.search(sentence) and not (MATHEMATICAL_WORDING.search(sentence) or hedged):
+        return "states a cause as fact instead of a mathematical relationship."
+    if (
+        ROOT_CAUSE.search(sentence)
+        and not ROOT_CAUSE_UNKNOWN.search(sentence)
+        and not SPECULATION.search(sentence)
+    ):
+        return "claims a root cause has been established."
+    if NAMED_CAUSES.search(sentence) and not hedged and not _reports_missing_evidence(sentence):
+        return "names a cause without evidence."
+    if METRIC_CHANGE.search(sentence) and not hedged:
+        return "claims a change in a metric that is not in the evidence."
+    return None
+
+
 def _check_claims(field, text):
-    issues = []
-    for sentence in _sentences(text):
-        if PROOF_CLAIMS.search(sentence) and not NEGATION.search(sentence):
-            issues.append(f"{field} presents a conclusion as proven.")
-        if CAUSAL_CLAIMS.search(sentence) and not HEDGES.search(sentence):
-            issues.append(f"{field} states a cause as fact.")
-        if (
-            ATTRIBUTION_CLAIMS.search(sentence)
-            and not MATHEMATICAL_WORDING.search(sentence)
-            and not HEDGES.search(sentence)
-        ):
-            issues.append(f"{field} states a cause as fact instead of a mathematical relationship.")
-        if (
-            ROOT_CAUSE.search(sentence)
-            and not ROOT_CAUSE_UNKNOWN.search(sentence)
-            and not SPECULATION.search(sentence)
-        ):
-            issues.append(f"{field} claims a root cause has been established.")
-        if NAMED_CAUSES.search(sentence) and not HEDGES.search(sentence):
-            issues.append(f"{field} names a cause without evidence.")
-        if METRIC_CHANGE.search(sentence) and not HEDGES.search(sentence):
-            issues.append(f"{field} claims a change in a metric that is not in the evidence.")
-    return issues
+    problems = filter(None, map(_sentence_problem, _sentences(text)))
+    return [f"{field} {problem}" for problem in problems]
 
 
 def _check_numbers(field, text, allowed):
@@ -162,9 +179,12 @@ def _check_hypotheses(result, evidence, allowed):
     for item in result.hypotheses:
         field = f"Hypothesis {item.rank}"
         issues += _check_ids(field, item.evidence_ids, evidence)
-        issues += _check_text(field, item.statement, allowed)
+        issues += _check_text(f"{field} mathematical evidence", item.mathematical_evidence, allowed)
+        issues += _check_text(f"{field} business cause", item.unverified_business_cause, allowed)
         issues += _check_text(f"{field} uncertainty", item.uncertainty, allowed)
-        if not SPECULATION.search(item.statement):
+        if NAMED_CAUSES.search(item.mathematical_evidence):
+            issues.append(f"{field} mathematical evidence names a business cause.")
+        if not SPECULATION.search(item.unverified_business_cause):
             issues.append(f"{field} is not worded as a possibility.")
         if item.confidence != "low" and not _has_direct_support(item, evidence):
             issues.append(f"{field} has medium confidence without direct supporting evidence.")
@@ -176,34 +196,56 @@ def _check_hypotheses(result, evidence, allowed):
 
 
 def _check_data_needs(field, item, listed):
-    """Require any unavailable data a recommendation relies on to be listed as needed."""
+    """Keep uploaded checks to uploaded data, and list any outside data as needed."""
     text = " ".join(
-        [item.action, item.expected_impact, item.if_confirmed_next_step, item.if_not_confirmed_next_step]
+        [item.investigation, item.what_to_check, item.expected_impact, item.if_supported, item.if_not_supported]
     )
+    needed = [
+        (name, pattern)
+        for name, pattern in UNAVAILABLE_DATA.items()
+        if re.search(pattern, text, re.IGNORECASE)
+    ]
+    if item.check_source == "uploaded_data":
+        return [f"{field} is marked as uploaded data but relies on {name}." for name, _ in needed]
     return [
         f"{field} relies on {name} without listing it as additional information needed."
-        for name, pattern in UNAVAILABLE_DATA.items()
-        if re.search(pattern, text, re.IGNORECASE) and not re.search(pattern, listed, re.IGNORECASE)
+        for name, pattern in needed
+        if not re.search(pattern, listed, re.IGNORECASE)
     ]
+
+
+def _check_order(recommendations):
+    """Require checks on the uploaded data to come before external ones."""
+    sources = [item.check_source for item in sorted(recommendations, key=lambda r: r.priority)]
+    if not sources:
+        return []
+    if sources[0] != "uploaded_data":
+        return ["Recommendations must start with a check using the uploaded data."]
+    if sources != sorted(sources, reverse=True):
+        return ["Checks using the uploaded data must come before external checks."]
+    return []
 
 
 def _check_recommendations(result, evidence, allowed):
     issues = _check_sequence("Recommendation priorities", [r.priority for r in result.recommendations])
+    issues += _check_order(result.recommendations)
     ranks = {item.rank for item in result.hypotheses}
     listed = " ".join(need.information for need in result.additional_information)
 
     for item in result.recommendations:
         field = f"Recommendation {item.priority}"
         issues += _check_ids(field, item.evidence_ids, evidence)
-        issues += _check_text(field, item.action, allowed)
-        issues += _check_text(f"{field} expected impact", item.expected_impact, allowed)
         issues += _check_data_needs(field, item, listed)
         for label, text in (
-            ("if-confirmed step", item.if_confirmed_next_step),
-            ("if-not-confirmed step", item.if_not_confirmed_next_step),
+            ("investigation", item.investigation),
+            ("what to check", item.what_to_check),
+            ("if-supported step", item.if_supported),
+            ("if-not-supported step", item.if_not_supported),
+            ("expected impact", item.expected_impact),
         ):
-            if item.action_type == "investigate" or text.strip():
-                issues += _check_text(f"{field} {label}", text, allowed)
+            issues += _check_text(f"{field} {label}", text, allowed)
+        if len(_sentences(item.investigation)) > 1:
+            issues.append(f"{field} must describe one investigation.")
         if item.hypothesis_rank not in ranks:
             issues.append(f"{field} is not linked to a hypothesis.")
         if item.target_metric not in evidence.metrics:
@@ -217,9 +259,7 @@ def _check_recommendations(result, evidence, allowed):
 def validate_diagnosis(result, evidence):
     """Return a list of problems. An empty list means the response can be shown."""
     allowed = evidence.allowed_numbers()
-    issues = _check_ids("The executive diagnosis", result.executive_evidence_ids, evidence)
-    issues += _check_text("The executive diagnosis", result.executive_diagnosis, allowed)
-    issues += _check_text("The confidence explanation", result.confidence_explanation, allowed)
+    issues = _check_text("The confidence explanation", result.confidence_explanation, allowed)
     issues += _check_hypotheses(result, evidence, allowed)
     issues += _check_recommendations(result, evidence, allowed)
 
@@ -229,4 +269,4 @@ def validate_diagnosis(result, evidence):
         # Naming missing data is the point of this section, so metric names are allowed.
         issues += _check_text(field, item.information, allowed, claims=False)
         issues += _check_text(f"{field} reason", item.reason, allowed)
-    return issues
+    return list(dict.fromkeys(issues))

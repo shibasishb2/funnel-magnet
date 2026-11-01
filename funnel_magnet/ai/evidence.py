@@ -1,7 +1,8 @@
 """Build the only data the model ever sees: engine results with fact IDs.
 
 Nothing here reads CSV rows, campaign names or file names. Fact IDs start with
-M (metric), D (driver), T (tree path), W (data warning) or G (information gap).
+X (Python's diagnosis), M (metric), D (driver), T (tree path), W (data warning)
+or G (information gap).
 """
 
 import hashlib
@@ -12,7 +13,7 @@ from dataclasses import dataclass, field
 from funnel_magnet.ui import view
 
 NUMBER_PATTERN = re.compile(r"\d+(?:[.,]\d+)*")
-FACT_ID = re.compile(r"\b[MDTWG]\d+\b")
+FACT_ID = re.compile(r"\b[XMDTWG]\d+\b")
 PERIOD_LABEL = re.compile(r"\b\d{4}-(?:W\d{2}|\d{2})\b")
 
 
@@ -156,10 +157,23 @@ def _path_facts(diagnosis):
     ]
 
 
+def _uploaded_data_checks(diagnosis, single_campaign):
+    """List checks the user can already do in this dashboard."""
+    checks = ["Compare these metrics across earlier weekly or monthly periods."]
+    if not single_campaign and any("several campaigns" in text for text in diagnosis.warnings):
+        checks.insert(0, "Select each campaign separately to see whether the change is isolated.")
+    return checks
+
+
 def build_evidence(diagnosis, currency=None, load_warnings=(), single_campaign=False):
     """Turn a diagnosis into structured evidence for the model."""
     warnings = [*load_warnings, *diagnosis.warnings]
     facts = [
+        Fact(
+            "X1",
+            "mathematical_diagnosis",
+            " ".join(view.mathematical_diagnosis(diagnosis, currency)),
+        ),
         *_metric_facts(diagnosis, currency),
         *_driver_facts(diagnosis),
         *_path_facts(diagnosis),
@@ -179,6 +193,7 @@ def build_evidence(diagnosis, currency=None, load_warnings=(), single_campaign=F
         "currency": currency,
         "materiality_threshold_percent": round(diagnosis.threshold * 100, 2),
         "contributions_note": diagnosis.drivers_undefined_reason,
+        "checks_available_in_uploaded_data": _uploaded_data_checks(diagnosis, single_campaign),
     }
     return EvidencePack(
         context,

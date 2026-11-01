@@ -221,6 +221,9 @@ def show_dashboard(result, diagnosis, source_name, scope, single_campaign):
             "The figures below show what is available."
         )
 
+    st.subheader("Mathematical diagnosis")
+    st.html(render.mathematical_diagnosis_html(view.mathematical_diagnosis(diagnosis, currency)))
+
     st.subheader("KPI overview")
     st.html(render.kpis_html(view.kpi_cards(diagnosis, currency), prior_label, current_label))
 

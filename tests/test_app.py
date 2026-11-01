@@ -85,13 +85,12 @@ def good_reply():
     cpm = evidence.metric_fact_id("cpm")
     return json.dumps(
         {
-            "executive_diagnosis": "ROAS declined, and the arithmetic points to CPM.",
-            "executive_evidence_ids": ["D1"],
             "hypotheses": [
                 {
                     "rank": 1,
                     "diagnostic_node": "cpm",
-                    "statement": "Delivery costs may have risen.",
+                    "mathematical_evidence": "CPM rose and accounts for most of the movement.",
+                    "unverified_business_cause": "Delivery costs may have risen.",
                     "evidence_ids": [cpm],
                     "confidence": "low",
                     "uncertainty": "The data shows the change only.",
@@ -100,14 +99,15 @@ def good_reply():
             "recommendations": [
                 {
                     "priority": 1,
-                    "action_type": "investigate",
-                    "action": "Review placement delivery data.",
                     "hypothesis_rank": 1,
+                    "check_source": "uploaded_data",
+                    "investigation": "Compare CPM for each campaign separately.",
+                    "what_to_check": "See whether the rise appears in every campaign.",
+                    "if_supported": "Treat the rise as account-wide.",
+                    "if_not_supported": "Review settings in the affected campaign.",
                     "target_metric": "cpm",
-                    "expected_direction": "decrease",
-                    "expected_impact": "Lower costs would support ROAS.",
-                    "if_confirmed_next_step": "Move budget to lower-cost delivery.",
-                    "if_not_confirmed_next_step": "Compare each campaign.",
+                    "expected_direction": "unclear",
+                    "expected_impact": "This shows where to focus.",
                     "evidence_ids": [cpm],
                 }
             ],
@@ -133,6 +133,7 @@ def test_app_opens_on_a_sample_without_errors():
     assert not app.exception
     assert "Funnel Magnet" in page_text(app)
     assert [item.value for item in app.subheader] == [
+        "Mathematical diagnosis",
         "KPI overview",
         "Diagnostic decision tree",
         "Findings",
@@ -151,6 +152,16 @@ def test_without_a_key_the_button_is_off_and_the_dashboard_works(monkeypatch):
     assert generate_button(app).disabled
     assert any("no API key is configured" in item.value for item in app.info)
     assert "KPI overview" in [item.value for item in app.subheader]
+
+
+def test_mathematical_diagnosis_appears_without_a_key(monkeypatch):
+    load_settings = service.load_settings
+    monkeypatch.setattr(service, "load_settings", lambda secrets=None: load_settings({}))
+
+    text = page_text(start())
+
+    assert "Calculated by Python" in text
+    assert "The largest adverse driver is CPM" in text
 
 
 def test_model_is_not_called_on_load_or_refresh(monkeypatch):

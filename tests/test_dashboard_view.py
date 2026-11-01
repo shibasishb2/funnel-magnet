@@ -183,6 +183,77 @@ def test_waterfall_figure_uses_the_steps():
     assert list(trace.measure) == [step.measure for step in steps]
 
 
+def test_mathematical_diagnosis_follows_the_engine_path():
+    text = " ".join(view.mathematical_diagnosis(diagnose(0), "EUR"))
+
+    assert text.startswith("ROAS fell 14.3%, from 4.13 to 3.54.")
+    assert "The CPA result is mathematically explained by CPC (+17.1%), CVR (+0.3%)." in text
+    assert "The CPC result is mathematically explained by CPM (+18.3%), CTR (+1.0%)." in text
+    assert "The largest adverse driver is CPM, which contributed -0.64 to ROAS (88% of all movement)." in text
+    assert text.endswith("This shows how ROAS changed arithmetically, not why.")
+
+
+def test_mathematical_diagnosis_names_the_funnel_stage():
+    text = " ".join(view.mathematical_diagnosis(diagnose(3)))
+
+    assert "funnel stages: Checkout → Purchase" in text
+
+
+def test_mathematical_diagnosis_covers_aov():
+    text = " ".join(view.mathematical_diagnosis(diagnose(4), "EUR"))
+
+    assert "AOV fell" in text
+    assert "CPA result" not in text
+
+
+def test_mathematical_diagnosis_shows_the_offset_in_a_masked_problem():
+    text = " ".join(view.mathematical_diagnosis(diagnose(5)))
+
+    assert "largest adverse driver is CPM" in text
+    assert "largest favorable driver is AOV" in text
+
+
+def test_mathematical_diagnosis_for_a_healthy_control():
+    text = " ".join(view.mathematical_diagnosis(diagnose(6)))
+
+    assert "No branch needed investigation at the 5% threshold." in text
+
+
+def test_mathematical_diagnosis_with_both_branches():
+    current = Totals(1000.0, 100_000.0, 1600.0, 24.0, 1440.0, 1280.0, 320.0, 48.0)
+    text = " ".join(view.mathematical_diagnosis(diagnose_totals(PRIOR, current)))
+
+    assert "The CPC result" in text and "The CVR result" in text
+
+
+def test_mathematical_diagnosis_without_contributions():
+    current = Totals(1000.0, 100_000.0, 2000.0, 0.0, 0.0, 1600.0, 400.0, 100.0)
+    text = " ".join(view.mathematical_diagnosis(diagnose_totals(PRIOR, current)))
+
+    assert "Contributions were not calculated." in text
+    assert "largest adverse driver" not in text
+
+
+def test_mathematical_diagnosis_when_roas_cannot_be_compared():
+    empty = Totals(0.0, 0.0, 0.0, 0.0, 0.0)
+
+    assert view.mathematical_diagnosis(diagnose_totals(PRIOR, empty)) == [
+        "ROAS can't be compared because at least one period has no spend."
+    ]
+
+
+@pytest.mark.parametrize("index", range(7))
+@pytest.mark.parametrize("granularity", [WEEKLY, MONTHLY])
+def test_mathematical_diagnosis_states_no_causes(index, granularity):
+    text = " ".join(view.mathematical_diagnosis(diagnose(index, granularity))).lower()
+
+    assert not [word for word in ("fatigue", "competition", "because", "due to", "caused") if word in text]
+
+
+def test_mathematical_diagnosis_is_deterministic():
+    assert view.mathematical_diagnosis(diagnose(0)) == view.mathematical_diagnosis(diagnose(0))
+
+
 def test_findings_separate_observations_from_drivers_and_causes():
     findings = view.build_findings(diagnose(0), "EUR")
 

@@ -39,13 +39,12 @@ def valid_reply(evidence=None):
     evidence = evidence or evidence_for()
     cpm = evidence.metric_fact_id("cpm")
     return {
-        "executive_diagnosis": "ROAS declined, and the arithmetic points to a higher CPM.",
-        "executive_evidence_ids": [evidence.metric_fact_id("roas"), "D1", "T1"],
         "hypotheses": [
             {
                 "rank": 1,
                 "diagnostic_node": "cpm",
-                "statement": "Delivery costs may have risen because of stronger competition in the auction.",
+                "mathematical_evidence": "CPM rose and accounts for most of the ROAS movement.",
+                "unverified_business_cause": "Delivery costs may have risen because of stronger competition in the auction.",
                 "evidence_ids": [cpm, "D1"],
                 "confidence": "low",
                 "uncertainty": "The data does not include auction or competitor information.",
@@ -54,16 +53,30 @@ def valid_reply(evidence=None):
         "recommendations": [
             {
                 "priority": 1,
-                "action_type": "investigate",
-                "action": "Review placement and audience delivery data to see where costs rose.",
                 "hypothesis_rank": 1,
+                "check_source": "uploaded_data",
+                "investigation": "Compare CPM for each campaign separately.",
+                "what_to_check": "See whether the rise appears in every campaign or only one.",
+                "if_supported": "Treat the rise as account-wide and move to the external check.",
+                "if_not_supported": "Review recent settings changes in the affected campaign.",
+                "target_metric": "cpm",
+                "expected_direction": "unclear",
+                "expected_impact": "This shows where to focus and does not change CPM by itself.",
+                "evidence_ids": [cpm, "W2"],
+            },
+            {
+                "priority": 2,
+                "hypothesis_rank": 1,
+                "check_source": "external_data",
+                "investigation": "Review placement and audience delivery reports.",
+                "what_to_check": "Find which delivery segments have the largest cost rise.",
+                "if_supported": "Shift budget away from the most expensive delivery.",
+                "if_not_supported": "Keep the current delivery mix and review bidding settings.",
                 "target_metric": "cpm",
                 "expected_direction": "decrease",
                 "expected_impact": "Lower delivery costs would support ROAS if the hypothesis holds.",
-                "if_confirmed_next_step": "Shift budget away from the most expensive delivery.",
-                "if_not_confirmed_next_step": "Compare each campaign before changing budgets.",
                 "evidence_ids": [cpm, "G1"],
-            }
+            },
         ],
         "additional_information": [
             {
@@ -104,6 +117,7 @@ def test_fact_ids_are_unique_and_cover_every_kind():
 
     assert len(ids) == len(set(ids))
     assert {fact.kind for fact in evidence.facts} == {
+        "mathematical_diagnosis",
         "metric",
         "mathematical_driver",
         "diagnostic_path",
@@ -172,12 +186,7 @@ def test_valid_reply_passes():
 def test_healthy_scenario_can_return_no_hypotheses():
     evidence = evidence_for(6)
     reply = valid_reply(evidence)
-    reply.update(
-        executive_evidence_ids=[evidence.metric_fact_id("roas")],
-        hypotheses=[],
-        recommendations=[],
-        additional_information=[],
-    )
+    reply.update(hypotheses=[], recommendations=[], additional_information=[])
 
     assert issues_for(reply, evidence) == []
 
@@ -198,7 +207,6 @@ def edit(path, value):
         (["hypotheses", 0, "evidence_ids"], [], "cites no evidence"),
         (["recommendations", 0, "evidence_ids"], ["Z1"], "unknown evidence ID"),
         (["recommendations", 0, "evidence_ids"], [], "cites no evidence"),
-        (["executive_evidence_ids"], [], "cites no evidence"),
         (["additional_information", 0, "evidence_ids"], ["G99"], "unknown evidence ID"),
     ],
 )
@@ -209,9 +217,9 @@ def test_invalid_evidence_ids_are_rejected(path, value, expected):
 @pytest.mark.parametrize(
     "path, text",
     [
-        (["executive_diagnosis"], "ROAS fell by 37.5% this week."),
-        (["hypotheses", 0, "statement"], "Costs may have risen as 12 rivals entered."),
-        (["recommendations", 0, "action"], "Cut the budget by 40%."),
+        (["confidence_explanation"], "ROAS fell by 37.5% this week."),
+        (["hypotheses", 0, "unverified_business_cause"], "Costs may have risen as 12 rivals entered."),
+        (["recommendations", 0, "investigation"], "Cut the budget by 40%."),
         (["recommendations", 0, "expected_impact"], "This could add 0.75 to ROAS."),
         (["confidence_explanation"], "There is a 90% chance this is right."),
     ],
@@ -224,7 +232,7 @@ def test_rounded_percentages_are_accepted():
     evidence = evidence_for()
     change = abs(evidence.by_id[evidence.metric_fact_id("roas")].data["change_percent"])
 
-    assert issues_for(edit(["executive_diagnosis"], f"ROAS moved about {round(change)}%."), evidence) == []
+    assert issues_for(edit(["confidence_explanation"], f"ROAS moved about {round(change)}%."), evidence) == []
 
 
 def test_digits_in_fact_ids_and_period_labels_are_not_evidence():
@@ -238,7 +246,7 @@ def test_numbers_from_the_evidence_are_accepted():
     roas = evidence.by_id[evidence.metric_fact_id("roas")]
     text = f"ROAS moved {abs(roas.data['change_percent'])}% in 2026-W35, as M1 shows."
 
-    assert issues_for(edit(["executive_diagnosis"], text), evidence) == []
+    assert issues_for(edit(["confidence_explanation"], text), evidence) == []
 
 
 @pytest.mark.parametrize(
@@ -254,7 +262,7 @@ def test_numbers_from_the_evidence_are_accepted():
     ],
 )
 def test_causal_claims_are_rejected(text):
-    issues = issues_for(edit(["executive_diagnosis"], text))
+    issues = issues_for(edit(["confidence_explanation"], text))
 
     assert any("cause" in issue or "proven" in issue for issue in issues)
 
@@ -269,11 +277,13 @@ def test_causal_claims_are_rejected(text):
     ],
 )
 def test_hedged_statements_are_accepted(text):
-    assert issues_for(edit(["executive_diagnosis"], text)) == []
+    assert issues_for(edit(["confidence_explanation"], text)) == []
 
 
 def test_hypothesis_must_be_worded_as_a_possibility():
-    issues = issues_for(edit(["hypotheses", 0, "statement"], "Delivery costs rose in the auction."))
+    issues = issues_for(
+        edit(["hypotheses", 0, "unverified_business_cause"], "Delivery costs rose in the auction.")
+    )
 
     assert any("not worded as a possibility" in issue for issue in issues)
 
@@ -283,13 +293,13 @@ def test_hypothesis_must_be_worded_as_a_possibility():
     ["CAC worsened this period.", "LTV is falling.", "Frequency rose sharply."],
 )
 def test_invented_metrics_are_rejected(text):
-    issues = issues_for(edit(["executive_diagnosis"], text))
+    issues = issues_for(edit(["confidence_explanation"], text))
 
     assert any("not in the evidence" in issue for issue in issues)
 
 
 def test_checking_unavailable_data_is_allowed():
-    assert issues_for(edit(["executive_diagnosis"], "Check whether frequency increased.")) == []
+    assert issues_for(edit(["confidence_explanation"], "Check whether frequency increased.")) == []
 
 
 def test_unknown_target_metric_is_rejected():
@@ -348,7 +358,7 @@ def test_high_confidence_is_rejected_by_the_format(field, value):
 def test_first_live_wording_stays_rejected():
     text = "The decline in ROAS was primarily driven by CPA, which was caused by rising CPC."
 
-    assert any("cause" in issue for issue in issues_for(edit(["executive_diagnosis"], text)))
+    assert any("cause" in issue for issue in issues_for(edit(["confidence_explanation"], text)))
 
 
 @pytest.mark.parametrize(
@@ -360,7 +370,7 @@ def test_first_live_wording_stays_rejected():
     ],
 )
 def test_mathematical_relationships_are_allowed(text):
-    assert issues_for(edit(["executive_diagnosis"], text)) == []
+    assert issues_for(edit(["confidence_explanation"], text)) == []
 
 
 @pytest.mark.parametrize(
@@ -375,7 +385,7 @@ def test_mathematical_relationships_are_allowed(text):
     ],
 )
 def test_unlabelled_or_causal_links_are_rejected(text):
-    assert issues_for(edit(["executive_diagnosis"], text))
+    assert issues_for(edit(["confidence_explanation"], text))
 
 
 @pytest.mark.parametrize(
@@ -461,84 +471,250 @@ def test_low_purchase_volume_forces_low_confidence():
     assert any("without direct supporting evidence" in issue for issue in issues)
 
 
-@pytest.mark.parametrize("field", ["if_confirmed_next_step", "if_not_confirmed_next_step"])
-def test_investigation_needs_both_next_steps(field):
-    issues = issues_for(edit(["recommendations", 0, field], "  "))
-
-    assert any("step is empty" in issue for issue in issues)
+# Separating Python's diagnosis from the model's interpretation
 
 
-def test_optimize_action_can_omit_next_steps():
+def test_model_cannot_supply_a_diagnosis():
+    assert not [name for name in AIDiagnosis.model_fields if "diagnosis" in name]
+
     reply = valid_reply()
-    reply["recommendations"][0].update(
-        action_type="optimize", if_confirmed_next_step="", if_not_confirmed_next_step=""
+    reply["executive_diagnosis"] = "Invented text."
+
+    assert not hasattr(AIDiagnosis.model_validate(reply), "executive_diagnosis")
+
+
+def test_old_response_format_is_rejected():
+    with pytest.raises(ValueError):
+        AIDiagnosis.model_validate(
+            {
+                "executive_diagnosis": "Text.",
+                "hypotheses": [
+                    {"rank": 1, "diagnostic_node": "cpm", "statement": "Costs may rise.",
+                     "evidence_ids": ["M6"], "confidence": "low", "uncertainty": "Unknown."}
+                ],
+                "recommendations": [],
+                "additional_information": [],
+                "confidence_explanation": "Low.",
+            }
+        )
+
+
+def test_model_receives_pythons_diagnosis_as_evidence():
+    evidence = evidence_for()
+    fact = evidence.by_id["X1"]
+
+    assert fact.kind == "mathematical_diagnosis"
+    assert "CPM" in fact.statement and fact.statement in build_user_prompt(evidence)
+
+
+def test_prompt_keeps_the_arithmetic_with_python():
+    assert "Do not repeat" in SYSTEM_PROMPT
+    assert "unverified_business_cause" in SYSTEM_PROMPT
+    assert "if_not_supported" in SYSTEM_PROMPT
+
+
+def test_uploaded_data_checks_are_offered_to_the_model():
+    checks = evidence_for().context["checks_available_in_uploaded_data"]
+
+    assert any("each campaign" in check for check in checks)
+
+
+def test_single_campaign_view_does_not_offer_a_campaign_check():
+    result = load_meta_csv(SAMPLES[0].path)
+    name = result.data["campaign"].iloc[0]
+    diagnosis = run_diagnosis(result.data, WEEKLY, campaign=name)
+
+    evidence = build_evidence(diagnosis, result.currency, single_campaign=True)
+
+    assert not any(
+        "each campaign" in check for check in evidence.context["checks_available_in_uploaded_data"]
     )
 
-    assert issues_for(reply) == []
+
+def test_mathematical_evidence_cannot_name_a_cause():
+    issues = issues_for(
+        edit(["hypotheses", 0, "mathematical_evidence"], "CPM may reflect auction competition.")
+    )
+
+    assert any("names a business cause" in issue for issue in issues)
 
 
-def test_next_steps_are_checked_like_other_text():
-    issues = issues_for(edit(["recommendations", 0, "if_confirmed_next_step"], "Cut spend by 40%."))
+# Recommendation structure
+
+
+@pytest.mark.parametrize(
+    "field", ["investigation", "what_to_check", "if_supported", "if_not_supported"]
+)
+def test_every_recommendation_part_is_required(field):
+    assert any("is empty" in issue for issue in issues_for(edit(["recommendations", 0, field], "  ")))
+
+
+@pytest.mark.parametrize("field", ["what_to_check", "if_supported", "if_not_supported"])
+def test_recommendation_parts_are_checked_for_numbers(field):
+    issues = issues_for(edit(["recommendations", 0, field], "Cut spend by 40%."))
 
     assert any("not in the evidence" in issue for issue in issues)
+
+
+def test_recommendation_must_be_one_investigation():
+    text = "Compare each campaign. Then review delivery settings."
+
+    issues = issues_for(edit(["recommendations", 0, "investigation"], text))
+
+    assert any("one investigation" in issue for issue in issues)
+
+
+def test_uploaded_data_checks_must_come_first():
+    reply = valid_reply()
+    first, second = reply["recommendations"]
+    first["priority"], second["priority"] = 2, 1
+
+    assert any("must start with a check using the uploaded data" in i for i in issues_for(reply))
+
+
+def test_external_check_cannot_sit_between_uploaded_checks():
+    reply = valid_reply()
+    first, second = reply["recommendations"]
+    third = dict(first, priority=3)
+    reply["recommendations"] = [first, second, third]
+
+    assert any("must come before external checks" in i for i in issues_for(reply))
+
+
+def test_only_external_checks_are_rejected():
+    reply = valid_reply()
+    reply["recommendations"] = [dict(reply["recommendations"][1], priority=1)]
+
+    assert any("must start with a check using the uploaded data" in i for i in issues_for(reply))
+
+
+@pytest.mark.parametrize(
+    "text, data",
+    [
+        ("Check ad frequency by campaign.", "frequency"),
+        ("Review ad-level results.", "ad-level data"),
+        ("Review bounce rate by device.", "bounce rate"),
+        ("Review competitor activity.", "competitor data"),
+        ("Review placement costs.", "placement data"),
+    ],
+)
+def test_uploaded_check_cannot_need_unavailable_data(text, data):
+    issues = issues_for(edit(["recommendations", 0, "investigation"], text))
+
+    assert any(f"uploaded data but relies on {data}" in issue for issue in issues)
 
 
 @pytest.mark.parametrize(
     "field, text, data",
     [
-        ("action", "Check ad frequency by campaign.", "frequency"),
-        ("action", "Review ad-level results.", "ad-level data"),
-        ("action", "Review bounce rate by device.", "bounce rate"),
-        ("action", "Review competitor activity.", "competitor data"),
-        ("if_confirmed_next_step", "Check whether seasonal demand changed.", "seasonality data"),
+        ("investigation", "Check ad frequency by campaign.", "frequency"),
+        ("investigation", "Review ad-level results.", "ad-level data"),
+        ("investigation", "Review bounce rate by device.", "bounce rate"),
+        ("investigation", "Review competitor activity.", "competitor data"),
+        ("if_supported", "Check whether seasonal demand changed.", "seasonality data"),
         ("expected_impact", "Reach data would show the audience size.", "reach"),
     ],
 )
-def test_unavailable_data_must_be_listed_as_needed(field, text, data):
-    reply = edit(["recommendations", 0, field], text)
+def test_external_data_must_be_listed_as_needed(field, text, data):
+    reply = valid_reply()
+    reply["recommendations"][1].update(
+        {
+            "investigation": "Review delivery reports.",
+            "what_to_check": "Find the largest cost rise.",
+            "if_supported": "Shift budget.",
+            "if_not_supported": "Keep the current mix.",
+            "expected_impact": "Lower costs would support ROAS.",
+            field: text,
+        }
+    )
     reply["additional_information"] = [
         {"information": "Budget history.", "reason": "It gives context.", "evidence_ids": ["G1"]}
     ]
-    reply["recommendations"][0]["action"] = (
-        text if field == "action" else "Review delivery by campaign."
-    )
 
     assert any(f"relies on {data}" in issue for issue in issues_for(reply))
 
 
-def test_listed_data_can_be_recommended():
-    reply = edit(["recommendations", 0, "action"], "Check ad frequency by campaign.")
+def test_listed_data_can_be_used_in_an_external_check():
+    reply = edit(["recommendations", 1, "investigation"], "Check ad frequency by campaign.")
     reply["additional_information"][0]["information"] = "Placement, audience and frequency data."
 
     assert issues_for(reply) == []
 
 
-def test_available_campaign_review_needs_no_extra_data():
-    reply = edit(["recommendations", 0, "action"], "Compare CPM for each campaign.")
+def test_uploaded_campaign_check_needs_no_extra_data():
+    reply = valid_reply()
+    reply["recommendations"] = reply["recommendations"][:1]
     reply["additional_information"] = []
 
     assert issues_for(reply) == []
 
 
 def test_reach_as_an_everyday_verb_is_not_flagged():
-    reply = edit(["recommendations", 0, "action"], "Check whether costs reach the prior level.")
-    reply["additional_information"] = []
+    reply = edit(["recommendations", 0, "what_to_check"], "Check whether costs reach the prior level.")
 
     assert issues_for(reply) == []
 
 
-def test_next_steps_appear_in_the_interface():
+def test_recommendation_parts_appear_in_the_interface():
     result = service.AIResult(AIDiagnosis.model_validate(valid_reply()), "Fake", "m", None, None)
 
     html = render.ai_diagnosis_html(result, evidence_for())
 
-    assert "If confirmed" in html and "If not confirmed" in html
+    assert "What to check:" in html
+    assert "If supported:" in html and "If not supported:" in html
+    assert "Uploaded data" in html and "External data" in html
+    assert "Mathematical evidence:" in html and "Unverified business cause:" in html
 
 
-def test_prompt_states_the_new_rules():
-    assert "mathematically explained by" in SYSTEM_PROMPT
-    assert "the root cause remains" in SYSTEM_PROMPT
-    assert "if_not_confirmed_next_step" in SYSTEM_PROMPT
+# Missing evidence and duplicate reporting
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Confidence is low because the diagnostic identifies a clear mathematical driver (CPM) "
+        "but lacks the contextual data (such as auction competition or audience shifts) to "
+        "explain why that driver changed.",
+        "This analysis lacks competitor data.",
+        "Without seasonality data, this remains open.",
+        "Tracking information is missing from the evidence.",
+        "The diagnostic does not include competition data.",
+    ],
+)
+def test_statements_about_missing_evidence_are_accepted(text):
+    assert issues_for(edit(["confidence_explanation"], text)) == []
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Without doubt, creative fatigue is the problem.",
+        "The data lacks detail, but competition is the cause.",
+        "Lacking data, this was caused by fatigue.",
+        "Without more evidence, the decline is due to competition.",
+        "Competition is the reason, even without competitor data.",
+    ],
+)
+def test_missing_evidence_wording_cannot_hide_a_causal_claim(text):
+    assert issues_for(edit(["confidence_explanation"], text))
+
+
+def test_second_live_sentence_reports_one_issue():
+    text = "The increase in CPC is entirely attributable to a higher CPM, as CTR remained stable."
+
+    assert len(issues_for(edit(["confidence_explanation"], text))) == 1
+
+
+def test_repeated_wording_is_reported_once():
+    text = "This proves fatigue. This proves fatigue."
+
+    assert len(issues_for(edit(["confidence_explanation"], text))) == 1
+
+
+def test_different_problems_are_each_reported():
+    text = "This proves fatigue. Tracking is the issue."
+
+    assert len(issues_for(edit(["confidence_explanation"], text))) == 2
 
 
 # Service
@@ -722,7 +898,7 @@ def test_shared_deployment_on_the_paid_tier_is_allowed(clean_environment):
 
 def test_ai_html_escapes_model_text_and_keeps_labels_separate():
     evidence = evidence_for()
-    reply = edit(["executive_diagnosis"], "<script>alert('x')</script> Costs may be higher.")
+    reply = edit(["confidence_explanation"], "<script>alert('x')</script> Costs may be higher.")
     result = service.AIResult(AIDiagnosis.model_validate(reply), "Fake", "m", None, None)
 
     html = render.ai_diagnosis_html(result, evidence)

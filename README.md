@@ -2,7 +2,7 @@
 
 AI Marketing Performance Diagnostic Agent: an ESCP MBA prototype that diagnoses changes in Meta Ads performance.
 
-**Status:** Stage 3 is built. One live Gemini test returned valid structured output, and the rules were then tightened using mocked tests. A live response has not yet passed validation end to end. Report export and deployment are not built yet.
+**Status:** Stage 3 is built. Two live Gemini tests returned valid structured output, but neither passed validation. The design was then changed so Python writes the mathematical diagnosis, and this version has only been tested with mocked responses. Report export and deployment are not built yet.
 
 Use synthetic or anonymized data only.
 
@@ -64,14 +64,17 @@ Google's free-tier terms differ from its paid terms on how data may be used, so 
 
 ### What is sent and checked
 
-`funnel_magnet/ai/evidence.py` builds the only input the model receives: calculated metrics, drivers, tree paths, data warnings and information gaps, each with a fact ID. CSV rows, campaign names and file names are never sent.
+Python writes the mathematical diagnosis from the decision tree and contributions, and it appears with or without a key. Gemini receives that diagnosis and writes only hypotheses, recommendations, uncertainty explanations and missing-data requirements.
 
-`funnel_magnet/ai/validate.py` rejects the whole response if it cites an unknown or missing fact, contains a number that isn't in the evidence, names a metric that isn't in the evidence, or presents a cause as established. Hypotheses must stay on the diagnostic path, cite their own metric and be worded as possibilities.
+`funnel_magnet/ai/evidence.py` builds the only input the model receives: the mathematical diagnosis, calculated metrics, drivers, tree paths, data warnings, information gaps and the checks available in the uploaded data, with fact IDs on every fact. CSV rows, campaign names and file names are never sent.
 
-- Links between metrics must be described as arithmetic, such as "mathematically explained by". Statements such as "the root cause remains unknown" are allowed, but claiming a root cause is established is not.
+`funnel_magnet/ai/validate.py` rejects the whole response if it cites an unknown or missing fact, contains a number that isn't in the evidence, names a metric that isn't in the evidence, or presents a cause as established. Hypotheses must stay on the diagnostic path, cite their own metric and keep mathematical evidence apart from the unverified business cause, which must be worded as a possibility.
+
+- Links between metrics must be described as arithmetic, such as "mathematically explained by". Statements such as "the root cause remains unknown" are allowed, and so are statements about missing evidence, but claiming a root cause is established is not.
 - Confidence is low unless a hypothesis cites a separate lowest-level metric that moved materially. Medium is the highest level, and a low purchase volume warning forces low.
-- Every investigation must say what to do if the hypothesis is confirmed and if it is not.
-- A recommendation that relies on data the app doesn't have, such as frequency or placement data, must list that data as additional information needed.
+- Each recommendation is one investigation, stating what to check and what to do if the hypothesis is supported or not.
+- Checks using the uploaded data must come first, and they can't rely on data the app doesn't have. External checks must list the data they need as additional information needed.
+- Each wording problem is reported once per sentence.
 
 To use another provider, add a class with `generate()` to `funnel_magnet/ai/providers.py` and return it from `create_provider()` in `funnel_magnet/ai/service.py`.
 
