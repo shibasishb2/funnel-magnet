@@ -1,0 +1,7 @@
+* text=auto
+
+# The sample test compares these byte for byte, so they keep LF on every platform.
+data/samples/*.csv text eol=lf
+data/samples/*.json text eol=lf
+
+*.bat text eol=crlf

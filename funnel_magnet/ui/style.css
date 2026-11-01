@@ -1,0 +1,153 @@
+:root {
+  --fm-ink: #16324f;
+  --fm-text: #24303b;
+  --fm-muted: #5b6b7a;
+  --fm-line: #d9dfe5;
+  --fm-surface: #ffffff;
+  --fm-soft: #f4f6f8;
+  --fm-worse: #a32020;
+  --fm-worse-bg: #fbeaea;
+  --fm-better: #006300;
+  --fm-better-bg: #e8f5e8;
+}
+
+[data-testid="stMainBlockContainer"] { padding-top: 4.5rem; max-width: 1240px; }
+
+.fm-header {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  padding-bottom: 12px;
+  margin-bottom: 8px;
+  border-bottom: 2px solid var(--fm-ink);
+}
+.fm-brand {
+  color: var(--fm-ink);
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.fm-tagline { color: var(--fm-muted); font-size: 0.95rem; }
+
+.fm-kpi-note { color: var(--fm-muted); font-size: 0.85rem; margin-bottom: 8px; }
+.fm-kpis {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+}
+@media (max-width: 1400px) {
+  .fm-kpis { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+}
+.fm-kpi {
+  background: var(--fm-surface);
+  border: 1px solid var(--fm-line);
+  border-radius: 8px;
+  padding: 10px;
+}
+.fm-kpi-label { color: var(--fm-muted); font-size: 0.8rem; font-weight: 600; }
+.fm-kpi-value { color: var(--fm-ink); font-size: 1.35rem; font-weight: 700; line-height: 1.3; }
+.fm-kpi-prior { color: var(--fm-muted); font-size: 0.8rem; margin-bottom: 8px; }
+
+.fm-pill {
+  display: inline-block;
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.fm-worse { color: var(--fm-worse); background: var(--fm-worse-bg); }
+.fm-better { color: var(--fm-better); background: var(--fm-better-bg); }
+.fm-stable, .fm-undefined { color: var(--fm-muted); background: var(--fm-soft); }
+
+.fm-tree-scroll { overflow-x: auto; padding: 4px 0 8px; }
+.fm-tree { min-width: 880px; }
+.fm-tree-item { display: flex; align-items: center; }
+
+.fm-node {
+  flex: 0 0 196px;
+  background: var(--fm-soft);
+  border: 1px solid var(--fm-line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: var(--fm-muted);
+}
+.fm-on-path {
+  background: var(--fm-surface);
+  border: 2px solid var(--fm-ink);
+  padding: 7px 9px;
+  color: var(--fm-text);
+}
+.fm-node-top { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+.fm-node-label { font-weight: 600; font-size: 0.86rem; }
+.fm-on-path .fm-node-label { color: var(--fm-ink); }
+.fm-node-values { font-size: 0.8rem; margin: 2px 0 4px; }
+.fm-badge {
+  flex: none;
+  background: var(--fm-ink);
+  color: #ffffff;
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+/* Connectors: each child draws its own stem, with a spine joining the siblings. */
+.fm-kids {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-left: 40px;
+}
+.fm-kids::before {
+  content: "";
+  position: absolute;
+  left: -40px;
+  top: 50%;
+  width: 20px;
+  border-top: 1px solid #a9b4be;
+}
+.fm-kid { position: relative; }
+.fm-kid::before {
+  content: "";
+  position: absolute;
+  left: -20px;
+  top: 50%;
+  width: 20px;
+  border-top: 1px solid #a9b4be;
+}
+.fm-kid::after {
+  content: "";
+  position: absolute;
+  left: -20px;
+  top: -4px;
+  bottom: -4px;
+  border-left: 1px solid #a9b4be;
+}
+.fm-kid:first-child::after { top: 50%; }
+.fm-kid:last-child::after { bottom: 50%; }
+.fm-kid:only-child::after { display: none; }
+.fm-kid-on::before { border-top: 2px solid var(--fm-ink); }
+
+.fm-findings {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+.fm-panel {
+  background: var(--fm-surface);
+  border: 1px solid var(--fm-line);
+  border-top: 3px solid var(--fm-ink);
+  border-radius: 8px;
+  padding: 12px 14px;
+  color: var(--fm-text);
+  font-size: 0.9rem;
+}
+.fm-hypotheses { border-top: 3px dashed var(--fm-muted); background: var(--fm-soft); }
+.fm-panel-tag { color: var(--fm-ink); font-weight: 700; }
+.fm-panel-note { color: var(--fm-muted); font-size: 0.82rem; margin: 0 0 8px; }
+.fm-panel ul { margin: 0; padding-left: 18px; }
+.fm-panel li { margin-bottom: 4px; }
+.fm-panel p { margin-bottom: 6px; }

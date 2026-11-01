@@ -2,7 +2,7 @@
 
 AI Marketing Performance Diagnostic Agent: an ESCP MBA prototype that diagnoses changes in Meta Ads performance.
 
-**Status:** Stage 1 complete. The diagnostic engine works and is tested, but the Streamlit app does not use it yet.
+**Status:** Stage 2 complete. The Streamlit dashboard runs the tested diagnostic engine on uploaded files and seven sample scenarios. AI analysis, report export and deployment are not built yet.
 
 Use synthetic or anonymized data only.
 
@@ -30,6 +30,12 @@ The virtual environment is kept outside this folder because the folder syncs to 
 python -m venv "$env:USERPROFILE\.venvs\funnel-magnet"
 & "$env:USERPROFILE\.venvs\funnel-magnet\Scripts\python.exe" -m pip install -r requirements-dev.txt
 ```
+
+## Dashboard
+
+Choose a sample scenario or upload a Meta Ads daily export in the sidebar, then choose the period type, periods, campaign and materiality threshold. The app defaults to the latest two complete periods.
+
+`funnel_magnet/ui/` only presents engine results and calculates no metrics. Screenshots are in `docs/screenshots/`.
 
 ## Diagnostic engine
 
