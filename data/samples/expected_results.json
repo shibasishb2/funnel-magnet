@@ -1,0 +1,95 @@
+[
+  {
+    "file": "01_cpm_inflation.csv",
+    "description": "CPM rises while every other input holds.",
+    "expected_paths": [
+      [
+        "roas",
+        "cpa",
+        "cpc",
+        "cpm"
+      ]
+    ],
+    "expected_roas_status": "deteriorated",
+    "expected_top_adverse_driver": "cpm"
+  },
+  {
+    "file": "02_ctr_decline.csv",
+    "description": "CTR falls while every other input holds.",
+    "expected_paths": [
+      [
+        "roas",
+        "cpa",
+        "cpc",
+        "ctr"
+      ]
+    ],
+    "expected_roas_status": "deteriorated",
+    "expected_top_adverse_driver": "ctr"
+  },
+  {
+    "file": "03_landing_page_issue.csv",
+    "description": "Fewer link clicks become landing page views.",
+    "expected_paths": [
+      [
+        "roas",
+        "cpa",
+        "cvr",
+        "link_clicks_to_landing_page_views"
+      ]
+    ],
+    "expected_roas_status": "deteriorated",
+    "expected_top_adverse_driver": "link_clicks_to_landing_page_views"
+  },
+  {
+    "file": "04_checkout_friction.csv",
+    "description": "Fewer initiated checkouts become purchases.",
+    "expected_paths": [
+      [
+        "roas",
+        "cpa",
+        "cvr",
+        "checkouts_initiated_to_purchases"
+      ]
+    ],
+    "expected_roas_status": "deteriorated",
+    "expected_top_adverse_driver": "checkouts_initiated_to_purchases"
+  },
+  {
+    "file": "05_aov_decline.csv",
+    "description": "AOV falls while CPA holds.",
+    "expected_paths": [
+      [
+        "roas",
+        "aov"
+      ]
+    ],
+    "expected_roas_status": "deteriorated",
+    "expected_top_adverse_driver": "aov"
+  },
+  {
+    "file": "06_masked_problem.csv",
+    "description": "Higher AOV offsets a higher CPM, so ROAS looks stable.",
+    "expected_paths": [
+      [
+        "roas",
+        "cpa",
+        "cpc",
+        "cpm"
+      ]
+    ],
+    "expected_roas_status": "stable",
+    "expected_top_adverse_driver": "cpm"
+  },
+  {
+    "file": "07_healthy_control.csv",
+    "description": "No input changes.",
+    "expected_paths": [
+      [
+        "roas"
+      ]
+    ],
+    "expected_roas_status": "stable",
+    "expected_top_adverse_driver": null
+  }
+]

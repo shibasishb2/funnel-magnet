@@ -1,0 +1,277 @@
+Day,Campaign name,Amount spent (EUR),Impressions,Link clicks,Landing page views,Adds to cart,Checkouts initiated,Purchases,Purchases conversion value,Purchase ROAS (return on ad spend),Cost per purchase,CPC (cost per link click),"CPM (cost per 1,000 impressions)",CTR (link click-through rate),Attribution setting
+2026-06-01,Prospecting - Broad,506.49,50045,728,617,93,56,39,2313.46,4.57,12.99,0.70,10.12,1.45,7-day click or 1-day view
+2026-06-01,Retargeting - Site Visitors,301.18,30685,505,418,63,37,26,1592.23,5.29,11.58,0.60,9.82,1.65,7-day click or 1-day view
+2026-06-01,Seasonal - Summer Offer,204.24,20069,264,226,34,20,14,849.29,4.16,14.59,0.77,10.18,1.32,7-day click or 1-day view
+2026-06-02,Prospecting - Broad,517.13,51939,795,638,95,57,39,2377.78,4.60,13.26,0.65,9.96,1.53,7-day click or 1-day view
+2026-06-02,Retargeting - Site Visitors,298.70,29399,493,412,62,37,26,1538.42,5.15,11.49,0.61,10.16,1.68,7-day click or 1-day view
+2026-06-02,Seasonal - Summer Offer,197.33,19594,261,220,33,20,14,822.94,4.17,14.10,0.76,10.07,1.33,7-day click or 1-day view
+2026-06-03,Prospecting - Broad,483.30,48239,723,624,95,57,40,2399.08,4.96,12.08,0.67,10.02,1.50,7-day click or 1-day view
+2026-06-03,Retargeting - Site Visitors,300.38,29806,503,431,65,39,27,1600.97,5.33,11.13,0.60,10.08,1.69,7-day click or 1-day view
+2026-06-03,Seasonal - Summer Offer,197.85,19761,271,227,33,20,15,882.90,4.46,13.19,0.73,10.01,1.37,7-day click or 1-day view
+2026-06-04,Prospecting - Broad,490.78,49346,736,619,93,55,37,2229.15,4.54,13.26,0.67,9.95,1.49,7-day click or 1-day view
+2026-06-04,Retargeting - Site Visitors,296.57,29506,487,416,62,37,25,1507.10,5.08,11.86,0.61,10.05,1.65,7-day click or 1-day view
+2026-06-04,Seasonal - Summer Offer,193.25,19282,260,225,33,20,14,824.96,4.27,13.80,0.74,10.02,1.35,7-day click or 1-day view
+2026-06-05,Prospecting - Broad,511.82,51992,769,674,103,63,44,2593.50,5.07,11.63,0.67,9.84,1.48,7-day click or 1-day view
+2026-06-05,Retargeting - Site Visitors,288.84,28560,485,410,61,37,26,1587.34,5.50,11.11,0.60,10.11,1.70,7-day click or 1-day view
+2026-06-05,Seasonal - Summer Offer,204.09,20123,268,230,35,21,14,825.82,4.05,14.58,0.76,10.14,1.33,7-day click or 1-day view
+2026-06-06,Prospecting - Broad,511.55,50484,757,657,99,57,39,2296.54,4.49,13.12,0.68,10.13,1.50,7-day click or 1-day view
+2026-06-06,Retargeting - Site Visitors,302.20,29899,482,404,62,37,26,1547.62,5.12,11.62,0.63,10.11,1.61,7-day click or 1-day view
+2026-06-06,Seasonal - Summer Offer,200.68,19681,274,231,34,20,14,814.31,4.06,14.33,0.73,10.20,1.39,7-day click or 1-day view
+2026-06-07,Prospecting - Broad,503.47,52042,776,669,101,60,42,2526.02,5.02,11.99,0.65,9.67,1.49,7-day click or 1-day view
+2026-06-07,Retargeting - Site Visitors,307.40,30155,504,430,63,39,28,1684.86,5.48,10.98,0.61,10.19,1.67,7-day click or 1-day view
+2026-06-07,Seasonal - Summer Offer,198.80,19658,264,226,35,21,15,892.66,4.49,13.25,0.75,10.11,1.34,7-day click or 1-day view
+2026-06-08,Prospecting - Broad,492.06,49303,732,633,95,57,40,2414.06,4.91,12.30,0.67,9.98,1.48,7-day click or 1-day view
+2026-06-08,Retargeting - Site Visitors,301.21,30186,484,408,60,36,25,1532.84,5.09,12.05,0.62,9.98,1.60,7-day click or 1-day view
+2026-06-08,Seasonal - Summer Offer,201.14,20225,266,225,32,19,14,860.55,4.28,14.37,0.76,9.95,1.32,7-day click or 1-day view
+2026-06-09,Prospecting - Broad,493.92,48900,730,622,93,57,40,2442.09,4.94,12.35,0.68,10.10,1.49,7-day click or 1-day view
+2026-06-09,Retargeting - Site Visitors,300.88,30555,498,424,63,38,27,1578.47,5.25,11.14,0.60,9.85,1.63,7-day click or 1-day view
+2026-06-09,Seasonal - Summer Offer,202.35,20789,282,249,38,22,15,912.90,4.51,13.49,0.72,9.73,1.36,7-day click or 1-day view
+2026-06-10,Prospecting - Broad,506.54,51589,784,664,101,62,43,2558.88,5.05,11.78,0.65,9.82,1.52,7-day click or 1-day view
+2026-06-10,Retargeting - Site Visitors,305.51,30095,488,412,62,38,27,1650.75,5.40,11.32,0.63,10.15,1.62,7-day click or 1-day view
+2026-06-10,Seasonal - Summer Offer,201.89,20049,273,231,34,20,14,832.05,4.12,14.42,0.74,10.07,1.36,7-day click or 1-day view
+2026-06-11,Prospecting - Broad,493.90,50041,747,653,98,60,42,2533.59,5.13,11.76,0.66,9.87,1.49,7-day click or 1-day view
+2026-06-11,Retargeting - Site Visitors,291.83,28698,475,398,60,36,25,1501.66,5.15,11.67,0.61,10.17,1.66,7-day click or 1-day view
+2026-06-11,Seasonal - Summer Offer,198.46,20212,276,233,35,21,15,884.59,4.46,13.23,0.72,9.82,1.37,7-day click or 1-day view
+2026-06-12,Prospecting - Broad,505.82,50885,766,662,102,61,42,2450.77,4.85,12.04,0.66,9.94,1.51,7-day click or 1-day view
+2026-06-12,Retargeting - Site Visitors,295.73,30517,489,425,63,39,27,1622.06,5.48,10.95,0.60,9.69,1.60,7-day click or 1-day view
+2026-06-12,Seasonal - Summer Offer,199.16,20151,279,235,36,22,15,926.47,4.65,13.28,0.71,9.88,1.38,7-day click or 1-day view
+2026-06-13,Prospecting - Broad,493.37,49515,726,612,93,57,40,2412.63,4.89,12.33,0.68,9.96,1.47,7-day click or 1-day view
+2026-06-13,Retargeting - Site Visitors,296.05,29104,479,406,60,36,25,1511.08,5.10,11.84,0.62,10.17,1.65,7-day click or 1-day view
+2026-06-13,Seasonal - Summer Offer,198.14,19715,270,233,34,20,14,828.41,4.18,14.15,0.73,10.05,1.37,7-day click or 1-day view
+2026-06-14,Prospecting - Broad,499.87,49567,752,640,95,57,39,2417.45,4.84,12.82,0.66,10.08,1.52,7-day click or 1-day view
+2026-06-14,Retargeting - Site Visitors,292.84,29758,481,406,62,37,26,1592.98,5.44,11.26,0.61,9.84,1.62,7-day click or 1-day view
+2026-06-14,Seasonal - Summer Offer,200.07,20273,273,232,35,21,15,896.21,4.48,13.34,0.73,9.87,1.35,7-day click or 1-day view
+2026-06-15,Prospecting - Broad,511.12,52485,797,672,104,62,44,2713.98,5.31,11.62,0.64,9.74,1.52,7-day click or 1-day view
+2026-06-15,Retargeting - Site Visitors,298.33,29586,482,416,61,36,25,1471.21,4.93,11.93,0.62,10.08,1.63,7-day click or 1-day view
+2026-06-15,Seasonal - Summer Offer,201.60,19774,272,237,36,21,15,881.91,4.37,13.44,0.74,10.20,1.38,7-day click or 1-day view
+2026-06-16,Prospecting - Broad,503.01,51356,780,668,100,60,42,2381.57,4.73,11.98,0.64,9.79,1.52,7-day click or 1-day view
+2026-06-16,Retargeting - Site Visitors,303.13,30276,505,422,61,36,24,1477.84,4.88,12.63,0.60,10.01,1.67,7-day click or 1-day view
+2026-06-16,Seasonal - Summer Offer,195.71,19615,267,230,35,21,15,909.09,4.65,13.05,0.73,9.98,1.36,7-day click or 1-day view
+2026-06-17,Prospecting - Broad,509.71,50708,762,642,96,59,40,2475.52,4.86,12.74,0.67,10.05,1.50,7-day click or 1-day view
+2026-06-17,Retargeting - Site Visitors,302.80,29598,498,424,63,38,27,1571.55,5.19,11.21,0.61,10.23,1.68,7-day click or 1-day view
+2026-06-17,Seasonal - Summer Offer,210.08,21149,288,249,38,23,16,985.79,4.69,13.13,0.73,9.93,1.36,7-day click or 1-day view
+2026-06-18,Prospecting - Broad,484.55,48597,729,619,92,56,39,2359.86,4.87,12.42,0.66,9.97,1.50,7-day click or 1-day view
+2026-06-18,Retargeting - Site Visitors,298.20,29969,503,427,65,38,26,1582.01,5.31,11.47,0.59,9.95,1.68,7-day click or 1-day view
+2026-06-18,Seasonal - Summer Offer,198.34,20056,272,230,34,20,14,827.29,4.17,14.17,0.73,9.89,1.36,7-day click or 1-day view
+2026-06-19,Prospecting - Broad,497.32,49891,749,633,94,56,39,2314.88,4.65,12.75,0.66,9.97,1.50,7-day click or 1-day view
+2026-06-19,Retargeting - Site Visitors,297.57,29292,476,416,62,36,25,1508.03,5.07,11.90,0.63,10.16,1.63,7-day click or 1-day view
+2026-06-19,Seasonal - Summer Offer,200.73,20274,272,228,34,20,14,828.33,4.13,14.34,0.74,9.90,1.34,7-day click or 1-day view
+2026-06-20,Prospecting - Broad,506.99,49686,742,627,94,58,40,2462.48,4.86,12.67,0.68,10.20,1.49,7-day click or 1-day view
+2026-06-20,Retargeting - Site Visitors,297.63,29678,486,410,63,38,27,1634.16,5.49,11.02,0.61,10.03,1.64,7-day click or 1-day view
+2026-06-20,Seasonal - Summer Offer,197.07,19629,271,231,34,20,14,814.25,4.13,14.08,0.73,10.04,1.38,7-day click or 1-day view
+2026-06-21,Prospecting - Broad,512.21,52044,797,673,100,60,42,2547.12,4.97,12.20,0.64,9.84,1.53,7-day click or 1-day view
+2026-06-21,Retargeting - Site Visitors,306.39,30987,521,443,66,40,28,1659.46,5.42,10.94,0.59,9.89,1.68,7-day click or 1-day view
+2026-06-21,Seasonal - Summer Offer,200.60,20402,278,234,35,21,15,918.16,4.58,13.37,0.72,9.83,1.36,7-day click or 1-day view
+2026-06-22,Prospecting - Broad,499.83,49842,751,649,97,59,42,2547.64,5.10,11.90,0.67,10.03,1.51,7-day click or 1-day view
+2026-06-22,Retargeting - Site Visitors,299.34,29950,500,428,64,39,27,1610.81,5.38,11.09,0.60,9.99,1.67,7-day click or 1-day view
+2026-06-22,Seasonal - Summer Offer,198.58,19505,262,218,32,19,13,792.10,3.99,15.28,0.76,10.18,1.34,7-day click or 1-day view
+2026-06-23,Prospecting - Broad,504.83,49376,774,656,100,59,41,2488.64,4.93,12.31,0.65,10.22,1.57,7-day click or 1-day view
+2026-06-23,Retargeting - Site Visitors,297.29,29943,505,421,64,39,28,1686.25,5.67,10.62,0.59,9.93,1.69,7-day click or 1-day view
+2026-06-23,Seasonal - Summer Offer,199.88,19498,264,227,34,20,14,844.12,4.22,14.28,0.76,10.25,1.35,7-day click or 1-day view
+2026-06-24,Prospecting - Broad,497.68,49624,741,616,91,53,37,2256.46,4.53,13.45,0.67,10.03,1.49,7-day click or 1-day view
+2026-06-24,Retargeting - Site Visitors,304.52,30161,491,417,62,38,27,1686.16,5.54,11.28,0.62,10.10,1.63,7-day click or 1-day view
+2026-06-24,Seasonal - Summer Offer,201.21,20263,273,240,36,21,15,904.30,4.49,13.41,0.74,9.93,1.35,7-day click or 1-day view
+2026-06-25,Prospecting - Broad,495.97,49927,741,631,93,56,38,2274.80,4.59,13.05,0.67,9.93,1.48,7-day click or 1-day view
+2026-06-25,Retargeting - Site Visitors,298.81,29003,469,399,60,36,26,1559.59,5.22,11.49,0.64,10.30,1.62,7-day click or 1-day view
+2026-06-25,Seasonal - Summer Offer,197.20,19967,273,236,36,22,16,979.45,4.97,12.32,0.72,9.88,1.37,7-day click or 1-day view
+2026-06-26,Prospecting - Broad,498.53,50075,750,635,96,56,39,2364.99,4.74,12.78,0.66,9.96,1.50,7-day click or 1-day view
+2026-06-26,Retargeting - Site Visitors,295.91,29696,485,413,63,38,27,1648.64,5.57,10.96,0.61,9.96,1.63,7-day click or 1-day view
+2026-06-26,Seasonal - Summer Offer,196.24,19600,267,227,34,21,14,844.48,4.30,14.02,0.73,10.01,1.36,7-day click or 1-day view
+2026-06-27,Prospecting - Broad,503.73,49825,747,632,95,57,39,2311.80,4.59,12.92,0.67,10.11,1.50,7-day click or 1-day view
+2026-06-27,Retargeting - Site Visitors,301.35,30460,503,424,64,39,27,1632.07,5.42,11.16,0.60,9.89,1.65,7-day click or 1-day view
+2026-06-27,Seasonal - Summer Offer,200.92,20253,275,243,37,22,16,959.23,4.77,12.56,0.73,9.92,1.36,7-day click or 1-day view
+2026-06-28,Prospecting - Broad,486.92,48033,713,583,86,51,36,2145.78,4.41,13.53,0.68,10.14,1.48,7-day click or 1-day view
+2026-06-28,Retargeting - Site Visitors,308.04,30276,499,421,64,39,27,1610.10,5.23,11.41,0.62,10.17,1.65,7-day click or 1-day view
+2026-06-28,Seasonal - Summer Offer,202.02,19826,271,238,36,22,16,956.23,4.73,12.63,0.75,10.19,1.37,7-day click or 1-day view
+2026-06-29,Prospecting - Broad,511.34,51843,775,668,102,61,44,2590.45,5.07,11.62,0.66,9.86,1.49,7-day click or 1-day view
+2026-06-29,Retargeting - Site Visitors,297.55,29737,493,411,63,38,26,1540.22,5.18,11.44,0.60,10.01,1.66,7-day click or 1-day view
+2026-06-29,Seasonal - Summer Offer,204.05,20599,277,238,35,21,14,859.41,4.21,14.58,0.74,9.91,1.34,7-day click or 1-day view
+2026-06-30,Prospecting - Broad,490.90,49234,746,639,98,59,43,2617.40,5.33,11.42,0.66,9.97,1.52,7-day click or 1-day view
+2026-06-30,Retargeting - Site Visitors,295.91,29765,485,406,60,36,26,1566.88,5.30,11.38,0.61,9.94,1.63,7-day click or 1-day view
+2026-06-30,Seasonal - Summer Offer,200.94,19988,274,235,35,22,15,894.81,4.45,13.40,0.73,10.05,1.37,7-day click or 1-day view
+2026-07-01,Prospecting - Broad,496.96,49922,773,652,98,58,40,2405.80,4.84,12.42,0.64,9.95,1.55,7-day click or 1-day view
+2026-07-01,Retargeting - Site Visitors,305.49,30979,504,433,66,39,27,1622.27,5.31,11.31,0.61,9.86,1.63,7-day click or 1-day view
+2026-07-01,Seasonal - Summer Offer,195.24,19337,257,216,32,19,13,776.12,3.98,15.02,0.76,10.10,1.33,7-day click or 1-day view
+2026-07-02,Prospecting - Broad,508.20,50640,765,656,97,58,40,2424.42,4.77,12.71,0.66,10.04,1.51,7-day click or 1-day view
+2026-07-02,Retargeting - Site Visitors,306.03,30501,485,410,62,38,27,1629.45,5.32,11.33,0.63,10.03,1.59,7-day click or 1-day view
+2026-07-02,Seasonal - Summer Offer,201.47,19880,270,231,35,21,15,900.32,4.47,13.43,0.75,10.13,1.36,7-day click or 1-day view
+2026-07-03,Prospecting - Broad,498.93,48589,705,596,90,54,38,2267.32,4.54,13.13,0.71,10.27,1.45,7-day click or 1-day view
+2026-07-03,Retargeting - Site Visitors,304.44,31149,499,419,63,38,28,1662.56,5.46,10.87,0.61,9.77,1.60,7-day click or 1-day view
+2026-07-03,Seasonal - Summer Offer,198.01,20350,265,224,35,21,15,896.02,4.53,13.20,0.75,9.73,1.30,7-day click or 1-day view
+2026-07-04,Prospecting - Broad,502.29,50271,768,661,99,60,42,2512.39,5.00,11.96,0.65,9.99,1.53,7-day click or 1-day view
+2026-07-04,Retargeting - Site Visitors,301.54,30233,496,414,61,36,25,1493.42,4.95,12.06,0.61,9.97,1.64,7-day click or 1-day view
+2026-07-04,Seasonal - Summer Offer,202.64,20171,268,227,34,20,14,843.58,4.16,14.47,0.76,10.05,1.33,7-day click or 1-day view
+2026-07-05,Prospecting - Broad,497.86,50207,754,653,97,58,40,2451.04,4.92,12.45,0.66,9.92,1.50,7-day click or 1-day view
+2026-07-05,Retargeting - Site Visitors,300.97,29924,487,422,65,40,28,1646.74,5.47,10.75,0.62,10.06,1.63,7-day click or 1-day view
+2026-07-05,Seasonal - Summer Offer,201.50,20462,274,228,34,21,15,900.49,4.47,13.43,0.74,9.85,1.34,7-day click or 1-day view
+2026-07-06,Prospecting - Broad,485.83,47317,699,594,88,52,36,2201.98,4.53,13.50,0.70,10.27,1.48,7-day click or 1-day view
+2026-07-06,Retargeting - Site Visitors,294.52,29804,492,424,64,39,27,1587.26,5.39,10.91,0.60,9.88,1.65,7-day click or 1-day view
+2026-07-06,Seasonal - Summer Offer,197.65,19868,258,218,32,20,14,823.59,4.17,14.12,0.77,9.95,1.30,7-day click or 1-day view
+2026-07-07,Prospecting - Broad,500.39,49206,752,635,93,56,39,2351.94,4.70,12.83,0.67,10.17,1.53,7-day click or 1-day view
+2026-07-07,Retargeting - Site Visitors,297.05,29958,490,419,62,37,26,1586.89,5.34,11.43,0.61,9.92,1.64,7-day click or 1-day view
+2026-07-07,Seasonal - Summer Offer,203.99,20386,282,244,36,22,15,907.13,4.45,13.60,0.72,10.01,1.38,7-day click or 1-day view
+2026-07-08,Prospecting - Broad,501.47,51381,775,652,98,58,40,2429.88,4.85,12.54,0.65,9.76,1.51,7-day click or 1-day view
+2026-07-08,Retargeting - Site Visitors,303.05,29770,496,422,63,37,26,1536.26,5.07,11.66,0.61,10.18,1.67,7-day click or 1-day view
+2026-07-08,Seasonal - Summer Offer,202.99,20637,280,239,35,21,15,889.34,4.38,13.53,0.72,9.84,1.36,7-day click or 1-day view
+2026-07-09,Prospecting - Broad,495.26,49951,720,605,90,53,37,2208.34,4.46,13.39,0.69,9.91,1.44,7-day click or 1-day view
+2026-07-09,Retargeting - Site Visitors,298.76,29883,490,414,63,38,26,1547.71,5.18,11.49,0.61,10.00,1.64,7-day click or 1-day view
+2026-07-09,Seasonal - Summer Offer,197.51,19509,267,228,35,21,15,909.68,4.61,13.17,0.74,10.12,1.37,7-day click or 1-day view
+2026-07-10,Prospecting - Broad,481.50,47105,698,585,89,52,36,2206.72,4.58,13.38,0.69,10.22,1.48,7-day click or 1-day view
+2026-07-10,Retargeting - Site Visitors,305.15,30661,509,427,64,39,27,1632.22,5.35,11.30,0.60,9.95,1.66,7-day click or 1-day view
+2026-07-10,Seasonal - Summer Offer,195.29,19987,274,228,34,20,14,820.94,4.20,13.95,0.71,9.77,1.37,7-day click or 1-day view
+2026-07-11,Prospecting - Broad,505.41,50440,764,661,96,58,40,2409.21,4.77,12.64,0.66,10.02,1.51,7-day click or 1-day view
+2026-07-11,Retargeting - Site Visitors,301.86,30149,502,429,65,40,27,1561.81,5.17,11.18,0.60,10.01,1.67,7-day click or 1-day view
+2026-07-11,Seasonal - Summer Offer,197.82,20004,266,233,35,21,15,906.47,4.58,13.19,0.74,9.89,1.33,7-day click or 1-day view
+2026-07-12,Prospecting - Broad,497.61,50007,766,662,101,60,41,2464.44,4.95,12.14,0.65,9.95,1.53,7-day click or 1-day view
+2026-07-12,Retargeting - Site Visitors,302.94,30001,500,431,65,39,28,1679.45,5.54,10.82,0.61,10.10,1.67,7-day click or 1-day view
+2026-07-12,Seasonal - Summer Offer,193.55,19035,262,225,32,20,14,841.60,4.35,13.83,0.74,10.17,1.38,7-day click or 1-day view
+2026-07-13,Prospecting - Broad,487.71,48586,740,629,94,57,40,2357.32,4.83,12.19,0.66,10.04,1.52,7-day click or 1-day view
+2026-07-13,Retargeting - Site Visitors,296.28,29441,493,430,63,37,26,1602.03,5.41,11.40,0.60,10.06,1.67,7-day click or 1-day view
+2026-07-13,Seasonal - Summer Offer,201.03,20566,273,236,35,21,14,831.79,4.14,14.36,0.74,9.77,1.33,7-day click or 1-day view
+2026-07-14,Prospecting - Broad,493.76,48084,728,613,92,54,38,2312.37,4.68,12.99,0.68,10.27,1.51,7-day click or 1-day view
+2026-07-14,Retargeting - Site Visitors,306.03,30470,497,422,63,37,26,1612.43,5.27,11.77,0.62,10.04,1.63,7-day click or 1-day view
+2026-07-14,Seasonal - Summer Offer,199.55,20280,271,234,36,22,16,952.20,4.77,12.47,0.74,9.84,1.34,7-day click or 1-day view
+2026-07-15,Prospecting - Broad,508.83,51400,766,658,101,60,42,2487.29,4.89,12.12,0.66,9.90,1.49,7-day click or 1-day view
+2026-07-15,Retargeting - Site Visitors,295.55,29331,482,412,61,37,25,1514.35,5.12,11.82,0.61,10.08,1.64,7-day click or 1-day view
+2026-07-15,Seasonal - Summer Offer,196.64,19859,264,229,34,21,15,915.43,4.66,13.11,0.74,9.90,1.33,7-day click or 1-day view
+2026-07-16,Prospecting - Broad,494.64,48832,715,597,89,56,39,2323.20,4.70,12.68,0.69,10.13,1.46,7-day click or 1-day view
+2026-07-16,Retargeting - Site Visitors,298.29,29528,483,422,63,38,27,1629.59,5.46,11.05,0.62,10.10,1.64,7-day click or 1-day view
+2026-07-16,Seasonal - Summer Offer,202.10,19792,277,232,35,21,14,830.14,4.11,14.44,0.73,10.21,1.40,7-day click or 1-day view
+2026-07-17,Prospecting - Broad,495.42,49958,758,651,102,63,45,2660.59,5.37,11.01,0.65,9.92,1.52,7-day click or 1-day view
+2026-07-17,Retargeting - Site Visitors,305.40,30276,499,418,64,40,28,1677.90,5.49,10.91,0.61,10.09,1.65,7-day click or 1-day view
+2026-07-17,Seasonal - Summer Offer,200.32,20280,278,234,35,21,15,894.11,4.46,13.35,0.72,9.88,1.37,7-day click or 1-day view
+2026-07-18,Prospecting - Broad,506.32,49771,753,640,96,58,40,2413.58,4.77,12.66,0.67,10.17,1.51,7-day click or 1-day view
+2026-07-18,Retargeting - Site Visitors,302.10,30657,497,414,62,38,27,1595.32,5.28,11.19,0.61,9.85,1.62,7-day click or 1-day view
+2026-07-18,Seasonal - Summer Offer,199.39,19463,261,222,33,20,14,837.06,4.20,14.24,0.76,10.24,1.34,7-day click or 1-day view
+2026-07-19,Prospecting - Broad,506.70,50161,762,652,102,63,43,2622.73,5.18,11.78,0.66,10.10,1.52,7-day click or 1-day view
+2026-07-19,Retargeting - Site Visitors,299.48,29640,487,416,62,37,25,1490.71,4.98,11.98,0.61,10.10,1.64,7-day click or 1-day view
+2026-07-19,Seasonal - Summer Offer,197.30,19669,266,224,34,21,15,887.74,4.50,13.15,0.74,10.03,1.35,7-day click or 1-day view
+2026-07-20,Prospecting - Broad,492.80,49722,753,655,100,60,43,2551.96,5.18,11.46,0.65,9.91,1.51,7-day click or 1-day view
+2026-07-20,Retargeting - Site Visitors,297.35,29994,504,427,65,39,28,1664.18,5.60,10.62,0.59,9.91,1.68,7-day click or 1-day view
+2026-07-20,Seasonal - Summer Offer,193.32,19225,261,221,32,19,14,833.69,4.31,13.81,0.74,10.06,1.36,7-day click or 1-day view
+2026-07-21,Prospecting - Broad,501.01,49731,766,647,98,59,41,2553.82,5.10,12.22,0.65,10.07,1.54,7-day click or 1-day view
+2026-07-21,Retargeting - Site Visitors,297.47,30576,510,431,63,38,26,1514.64,5.09,11.44,0.58,9.73,1.67,7-day click or 1-day view
+2026-07-21,Seasonal - Summer Offer,208.64,20800,283,245,37,22,16,956.33,4.58,13.04,0.74,10.03,1.36,7-day click or 1-day view
+2026-07-22,Prospecting - Broad,496.18,50480,755,640,97,57,39,2342.58,4.72,12.72,0.66,9.83,1.50,7-day click or 1-day view
+2026-07-22,Retargeting - Site Visitors,299.41,30092,488,405,61,38,26,1550.36,5.18,11.52,0.61,9.95,1.62,7-day click or 1-day view
+2026-07-22,Seasonal - Summer Offer,201.10,20474,277,230,35,21,14,851.92,4.24,14.36,0.73,9.82,1.35,7-day click or 1-day view
+2026-07-23,Prospecting - Broad,509.59,50628,737,630,94,56,40,2363.67,4.64,12.74,0.69,10.07,1.46,7-day click or 1-day view
+2026-07-23,Retargeting - Site Visitors,303.40,30434,502,431,65,41,28,1689.49,5.57,10.84,0.60,9.97,1.65,7-day click or 1-day view
+2026-07-23,Seasonal - Summer Offer,203.56,20016,267,226,33,20,14,821.93,4.04,14.54,0.76,10.17,1.33,7-day click or 1-day view
+2026-07-24,Prospecting - Broad,498.08,50419,752,649,96,58,40,2406.41,4.83,12.45,0.66,9.88,1.49,7-day click or 1-day view
+2026-07-24,Retargeting - Site Visitors,296.93,29396,487,422,62,37,26,1555.20,5.24,11.42,0.61,10.10,1.66,7-day click or 1-day view
+2026-07-24,Seasonal - Summer Offer,198.05,19385,261,216,33,20,14,844.39,4.26,14.15,0.76,10.22,1.35,7-day click or 1-day view
+2026-07-25,Prospecting - Broad,499.66,49665,753,654,98,60,41,2499.36,5.00,12.19,0.66,10.06,1.52,7-day click or 1-day view
+2026-07-25,Retargeting - Site Visitors,303.47,30250,514,434,65,39,28,1693.68,5.58,10.84,0.59,10.03,1.70,7-day click or 1-day view
+2026-07-25,Seasonal - Summer Offer,200.47,20319,277,230,35,21,15,885.94,4.42,13.36,0.72,9.87,1.36,7-day click or 1-day view
+2026-07-26,Prospecting - Broad,508.34,50054,754,643,97,58,40,2442.00,4.80,12.71,0.67,10.16,1.51,7-day click or 1-day view
+2026-07-26,Retargeting - Site Visitors,298.67,29578,484,408,60,35,24,1433.06,4.80,12.44,0.62,10.10,1.64,7-day click or 1-day view
+2026-07-26,Seasonal - Summer Offer,196.69,19630,259,220,33,19,14,856.47,4.35,14.05,0.76,10.02,1.32,7-day click or 1-day view
+2026-07-27,Prospecting - Broad,496.23,49344,755,639,94,57,41,2462.26,4.96,12.10,0.66,10.06,1.53,7-day click or 1-day view
+2026-07-27,Retargeting - Site Visitors,308.46,30445,505,429,64,39,27,1621.04,5.26,11.42,0.61,10.13,1.66,7-day click or 1-day view
+2026-07-27,Seasonal - Summer Offer,207.15,20633,277,236,35,21,14,841.52,4.06,14.80,0.75,10.04,1.34,7-day click or 1-day view
+2026-07-28,Prospecting - Broad,507.99,50598,762,656,100,60,42,2465.38,4.85,12.10,0.67,10.04,1.51,7-day click or 1-day view
+2026-07-28,Retargeting - Site Visitors,303.86,30117,493,407,62,37,26,1569.75,5.17,11.69,0.62,10.09,1.64,7-day click or 1-day view
+2026-07-28,Seasonal - Summer Offer,200.72,20070,261,221,34,20,14,839.24,4.18,14.34,0.77,10.00,1.30,7-day click or 1-day view
+2026-07-29,Prospecting - Broad,504.52,50432,761,657,100,60,43,2629.12,5.21,11.73,0.66,10.00,1.51,7-day click or 1-day view
+2026-07-29,Retargeting - Site Visitors,302.62,29725,493,418,64,38,27,1629.95,5.39,11.21,0.61,10.18,1.66,7-day click or 1-day view
+2026-07-29,Seasonal - Summer Offer,201.05,20629,281,236,36,22,15,900.15,4.48,13.40,0.72,9.75,1.36,7-day click or 1-day view
+2026-07-30,Prospecting - Broad,491.02,49626,751,656,101,61,43,2621.86,5.34,11.42,0.65,9.89,1.51,7-day click or 1-day view
+2026-07-30,Retargeting - Site Visitors,307.29,31958,526,444,66,40,28,1670.35,5.44,10.97,0.58,9.62,1.65,7-day click or 1-day view
+2026-07-30,Seasonal - Summer Offer,194.69,19775,260,217,34,20,14,827.76,4.25,13.91,0.75,9.85,1.31,7-day click or 1-day view
+2026-07-31,Prospecting - Broad,496.86,49204,741,628,91,56,39,2325.53,4.68,12.74,0.67,10.10,1.51,7-day click or 1-day view
+2026-07-31,Retargeting - Site Visitors,292.09,29201,461,390,59,35,25,1526.77,5.23,11.68,0.63,10.00,1.58,7-day click or 1-day view
+2026-07-31,Seasonal - Summer Offer,201.98,20070,260,224,33,19,13,787.79,3.90,15.54,0.78,10.06,1.30,7-day click or 1-day view
+2026-08-01,Prospecting - Broad,504.91,43794,642,554,82,49,35,2107.19,4.17,14.43,0.79,11.53,1.47,7-day click or 1-day view
+2026-08-01,Retargeting - Site Visitors,290.32,25294,427,364,55,33,23,1368.21,4.71,12.62,0.68,11.48,1.69,7-day click or 1-day view
+2026-08-01,Seasonal - Summer Offer,202.80,16840,229,196,29,18,13,777.18,3.83,15.60,0.89,12.04,1.36,7-day click or 1-day view
+2026-08-02,Prospecting - Broad,495.87,42809,641,543,86,53,38,2348.30,4.74,13.05,0.77,11.58,1.50,7-day click or 1-day view
+2026-08-02,Retargeting - Site Visitors,295.13,25264,420,357,55,34,24,1443.42,4.89,12.30,0.70,11.68,1.66,7-day click or 1-day view
+2026-08-02,Seasonal - Summer Offer,200.50,16644,224,192,28,17,12,730.04,3.64,16.71,0.90,12.05,1.35,7-day click or 1-day view
+2026-08-03,Prospecting - Broad,508.43,43145,664,559,85,51,36,2167.95,4.26,14.12,0.77,11.78,1.54,7-day click or 1-day view
+2026-08-03,Retargeting - Site Visitors,307.30,25616,420,358,55,33,23,1386.06,4.51,13.36,0.73,12.00,1.64,7-day click or 1-day view
+2026-08-03,Seasonal - Summer Offer,201.75,17057,231,199,30,18,12,714.20,3.54,16.81,0.87,11.83,1.35,7-day click or 1-day view
+2026-08-04,Prospecting - Broad,499.75,42025,628,542,81,49,35,2125.49,4.25,14.28,0.80,11.89,1.49,7-day click or 1-day view
+2026-08-04,Retargeting - Site Visitors,299.95,25613,420,342,52,31,22,1304.53,4.35,13.63,0.71,11.71,1.64,7-day click or 1-day view
+2026-08-04,Seasonal - Summer Offer,204.30,17137,234,197,30,18,13,756.90,3.70,15.72,0.87,11.92,1.37,7-day click or 1-day view
+2026-08-05,Prospecting - Broad,501.56,41634,632,540,80,49,34,2029.20,4.05,14.75,0.79,12.05,1.52,7-day click or 1-day view
+2026-08-05,Retargeting - Site Visitors,292.57,24975,410,352,53,32,23,1356.34,4.64,12.72,0.71,11.71,1.64,7-day click or 1-day view
+2026-08-05,Seasonal - Summer Offer,201.71,16908,230,198,30,18,13,775.19,3.84,15.52,0.88,11.93,1.36,7-day click or 1-day view
+2026-08-06,Prospecting - Broad,496.01,42103,621,516,79,45,31,1895.05,3.82,16.00,0.80,11.78,1.47,7-day click or 1-day view
+2026-08-06,Retargeting - Site Visitors,301.55,25713,426,368,55,33,23,1416.73,4.70,13.11,0.71,11.73,1.66,7-day click or 1-day view
+2026-08-06,Seasonal - Summer Offer,199.27,17451,237,203,31,19,13,777.60,3.90,15.33,0.84,11.42,1.36,7-day click or 1-day view
+2026-08-07,Prospecting - Broad,493.76,41344,633,530,78,47,33,1984.46,4.02,14.96,0.78,11.94,1.53,7-day click or 1-day view
+2026-08-07,Retargeting - Site Visitors,299.07,25127,419,351,52,32,22,1353.25,4.52,13.59,0.71,11.90,1.67,7-day click or 1-day view
+2026-08-07,Seasonal - Summer Offer,194.84,16315,225,193,28,16,11,651.72,3.34,17.71,0.87,11.94,1.38,7-day click or 1-day view
+2026-08-08,Prospecting - Broad,499.66,41464,620,528,80,47,33,1984.35,3.97,15.14,0.81,12.05,1.50,7-day click or 1-day view
+2026-08-08,Retargeting - Site Visitors,301.02,24916,408,343,51,31,22,1319.07,4.38,13.68,0.74,12.08,1.64,7-day click or 1-day view
+2026-08-08,Seasonal - Summer Offer,197.67,16634,224,192,29,18,13,762.99,3.86,15.21,0.88,11.88,1.35,7-day click or 1-day view
+2026-08-09,Prospecting - Broad,504.70,42086,627,533,78,46,32,1932.83,3.83,15.77,0.80,11.99,1.49,7-day click or 1-day view
+2026-08-09,Retargeting - Site Visitors,295.10,24713,408,345,52,31,22,1342.73,4.55,13.41,0.72,11.94,1.65,7-day click or 1-day view
+2026-08-09,Seasonal - Summer Offer,202.84,17729,241,202,30,18,12,730.84,3.60,16.90,0.84,11.44,1.36,7-day click or 1-day view
+2026-08-10,Prospecting - Broad,506.57,43140,640,548,84,51,36,2202.48,4.35,14.07,0.79,11.74,1.48,7-day click or 1-day view
+2026-08-10,Retargeting - Site Visitors,304.52,26133,433,371,55,33,23,1389.71,4.56,13.24,0.70,11.65,1.66,7-day click or 1-day view
+2026-08-10,Seasonal - Summer Offer,200.07,16413,221,185,28,17,12,713.89,3.57,16.67,0.91,12.19,1.35,7-day click or 1-day view
+2026-08-11,Prospecting - Broad,488.85,41427,637,544,82,49,35,2102.87,4.30,13.97,0.77,11.80,1.54,7-day click or 1-day view
+2026-08-11,Retargeting - Site Visitors,305.92,26121,436,357,54,33,23,1393.26,4.55,13.30,0.70,11.71,1.67,7-day click or 1-day view
+2026-08-11,Seasonal - Summer Offer,198.33,16806,225,187,28,17,12,723.87,3.65,16.53,0.88,11.80,1.34,7-day click or 1-day view
+2026-08-12,Prospecting - Broad,492.11,41566,608,523,78,47,33,2010.47,4.09,14.91,0.81,11.84,1.46,7-day click or 1-day view
+2026-08-12,Retargeting - Site Visitors,295.22,24955,410,347,53,32,23,1368.48,4.64,12.84,0.72,11.83,1.64,7-day click or 1-day view
+2026-08-12,Seasonal - Summer Offer,200.15,17175,226,194,30,18,13,788.08,3.94,15.40,0.89,11.65,1.32,7-day click or 1-day view
+2026-08-13,Prospecting - Broad,504.34,42054,629,533,80,48,34,2063.34,4.09,14.83,0.80,11.99,1.50,7-day click or 1-day view
+2026-08-13,Retargeting - Site Visitors,296.29,24874,396,329,50,31,22,1332.57,4.50,13.47,0.75,11.91,1.59,7-day click or 1-day view
+2026-08-13,Seasonal - Summer Offer,200.23,17125,226,190,28,17,12,724.75,3.62,16.69,0.89,11.69,1.32,7-day click or 1-day view
+2026-08-14,Prospecting - Broad,508.71,42354,631,533,81,49,35,2127.33,4.18,14.53,0.81,12.01,1.49,7-day click or 1-day view
+2026-08-14,Retargeting - Site Visitors,297.47,24775,410,351,52,31,22,1338.63,4.50,13.52,0.73,12.01,1.65,7-day click or 1-day view
+2026-08-14,Seasonal - Summer Offer,201.36,17458,238,201,31,19,13,785.32,3.90,15.49,0.85,11.53,1.36,7-day click or 1-day view
+2026-08-15,Prospecting - Broad,505.87,43032,666,570,84,51,35,2080.79,4.11,14.45,0.76,11.76,1.55,7-day click or 1-day view
+2026-08-15,Retargeting - Site Visitors,299.33,26244,442,377,56,33,23,1365.43,4.56,13.01,0.68,11.41,1.68,7-day click or 1-day view
+2026-08-15,Seasonal - Summer Offer,201.44,17093,231,195,29,17,12,736.34,3.66,16.79,0.87,11.78,1.35,7-day click or 1-day view
+2026-08-16,Prospecting - Broad,486.62,41634,633,532,81,48,34,1993.27,4.10,14.31,0.77,11.69,1.52,7-day click or 1-day view
+2026-08-16,Retargeting - Site Visitors,304.25,25958,429,364,56,34,24,1429.67,4.70,12.68,0.71,11.72,1.65,7-day click or 1-day view
+2026-08-16,Seasonal - Summer Offer,198.30,17418,238,201,30,18,12,729.88,3.68,16.53,0.83,11.38,1.37,7-day click or 1-day view
+2026-08-17,Prospecting - Broad,499.73,42834,639,540,83,50,35,2133.01,4.27,14.28,0.78,11.67,1.49,7-day click or 1-day view
+2026-08-17,Retargeting - Site Visitors,299.78,26175,422,352,54,32,22,1312.74,4.38,13.63,0.71,11.45,1.61,7-day click or 1-day view
+2026-08-17,Seasonal - Summer Offer,202.24,17521,236,205,31,19,13,787.88,3.90,15.56,0.86,11.54,1.35,7-day click or 1-day view
+2026-08-18,Prospecting - Broad,496.33,42377,627,540,80,48,34,2038.90,4.11,14.60,0.79,11.71,1.48,7-day click or 1-day view
+2026-08-18,Retargeting - Site Visitors,294.97,24219,404,348,52,32,23,1381.99,4.69,12.82,0.73,12.18,1.67,7-day click or 1-day view
+2026-08-18,Seasonal - Summer Offer,203.52,17277,233,195,29,17,12,727.52,3.57,16.96,0.87,11.78,1.35,7-day click or 1-day view
+2026-08-19,Prospecting - Broad,504.34,42310,626,531,80,48,32,1909.78,3.79,15.76,0.81,11.92,1.48,7-day click or 1-day view
+2026-08-19,Retargeting - Site Visitors,299.03,25629,419,352,53,32,22,1335.54,4.47,13.59,0.71,11.67,1.63,7-day click or 1-day view
+2026-08-19,Seasonal - Summer Offer,199.47,17047,227,190,28,17,12,726.93,3.64,16.62,0.88,11.70,1.33,7-day click or 1-day view
+2026-08-20,Prospecting - Broad,509.21,42755,660,551,83,50,35,2134.12,4.19,14.55,0.77,11.91,1.54,7-day click or 1-day view
+2026-08-20,Retargeting - Site Visitors,294.92,24630,408,341,50,30,21,1256.20,4.26,14.04,0.72,11.97,1.66,7-day click or 1-day view
+2026-08-20,Seasonal - Summer Offer,201.31,17448,239,205,32,19,13,766.18,3.81,15.49,0.84,11.54,1.37,7-day click or 1-day view
+2026-08-21,Prospecting - Broad,515.86,43310,637,547,81,49,35,2096.82,4.06,14.74,0.81,11.91,1.47,7-day click or 1-day view
+2026-08-21,Retargeting - Site Visitors,292.33,25145,412,353,52,32,22,1317.76,4.51,13.29,0.71,11.63,1.64,7-day click or 1-day view
+2026-08-21,Seasonal - Summer Offer,202.48,17268,232,198,29,17,12,730.52,3.61,16.87,0.87,11.73,1.34,7-day click or 1-day view
+2026-08-22,Prospecting - Broad,498.69,41894,644,566,86,51,36,2124.93,4.26,13.85,0.77,11.90,1.54,7-day click or 1-day view
+2026-08-22,Retargeting - Site Visitors,308.98,25393,420,356,54,33,23,1355.11,4.39,13.43,0.74,12.17,1.65,7-day click or 1-day view
+2026-08-22,Seasonal - Summer Offer,201.08,17306,237,203,30,18,13,795.30,3.96,15.47,0.85,11.62,1.37,7-day click or 1-day view
+2026-08-23,Prospecting - Broad,512.55,43704,665,573,83,49,34,2069.38,4.04,15.07,0.77,11.73,1.52,7-day click or 1-day view
+2026-08-23,Retargeting - Site Visitors,299.42,25344,407,356,53,32,23,1362.48,4.55,13.02,0.74,11.81,1.61,7-day click or 1-day view
+2026-08-23,Seasonal - Summer Offer,197.69,17085,229,190,28,17,12,716.39,3.62,16.47,0.86,11.57,1.34,7-day click or 1-day view
+2026-08-24,Prospecting - Broad,498.49,35629,539,455,68,41,29,1751.80,3.51,17.19,0.92,13.99,1.51,7-day click or 1-day view
+2026-08-24,Retargeting - Site Visitors,289.68,20899,341,292,44,26,18,1082.99,3.74,16.09,0.85,13.86,1.63,7-day click or 1-day view
+2026-08-24,Seasonal - Summer Offer,200.78,14317,198,170,25,15,10,598.02,2.98,20.08,1.01,14.02,1.38,7-day click or 1-day view
+2026-08-25,Prospecting - Broad,491.10,35237,536,455,68,41,29,1746.61,3.56,16.93,0.92,13.94,1.52,7-day click or 1-day view
+2026-08-25,Retargeting - Site Visitors,304.13,21962,365,308,45,27,19,1139.92,3.75,16.01,0.83,13.85,1.66,7-day click or 1-day view
+2026-08-25,Seasonal - Summer Offer,192.97,13689,186,157,24,14,10,607.80,3.15,19.30,1.04,14.10,1.36,7-day click or 1-day view
+2026-08-26,Prospecting - Broad,504.86,35933,542,470,69,42,29,1745.72,3.46,17.41,0.93,14.05,1.51,7-day click or 1-day view
+2026-08-26,Retargeting - Site Visitors,298.74,21718,371,321,48,29,21,1287.35,4.31,14.23,0.81,13.76,1.71,7-day click or 1-day view
+2026-08-26,Seasonal - Summer Offer,194.00,13503,188,158,24,14,10,603.67,3.11,19.40,1.03,14.37,1.39,7-day click or 1-day view
+2026-08-27,Prospecting - Broad,494.59,35390,532,451,68,41,29,1719.26,3.48,17.05,0.93,13.98,1.50,7-day click or 1-day view
+2026-08-27,Retargeting - Site Visitors,296.16,21304,360,302,46,27,19,1130.07,3.82,15.59,0.82,13.90,1.69,7-day click or 1-day view
+2026-08-27,Seasonal - Summer Offer,194.51,14172,186,158,24,14,10,612.07,3.15,19.45,1.05,13.72,1.31,7-day click or 1-day view
+2026-08-28,Prospecting - Broad,495.72,35086,538,447,69,42,30,1790.64,3.61,16.52,0.92,14.13,1.53,7-day click or 1-day view
+2026-08-28,Retargeting - Site Visitors,303.17,21367,355,303,45,27,19,1114.78,3.68,15.96,0.85,14.19,1.66,7-day click or 1-day view
+2026-08-28,Seasonal - Summer Offer,198.01,14383,195,165,24,14,10,594.48,3.00,19.80,1.02,13.77,1.36,7-day click or 1-day view
+2026-08-29,Prospecting - Broad,508.67,36969,565,480,70,43,30,1793.88,3.53,16.96,0.90,13.76,1.53,7-day click or 1-day view
+2026-08-29,Retargeting - Site Visitors,298.26,21399,358,304,44,26,18,1096.96,3.68,16.57,0.83,13.94,1.67,7-day click or 1-day view
+2026-08-29,Seasonal - Summer Offer,197.60,14111,195,168,25,15,11,658.12,3.33,17.96,1.01,14.00,1.38,7-day click or 1-day view
+2026-08-30,Prospecting - Broad,493.79,35330,518,449,68,41,29,1754.33,3.55,17.03,0.95,13.98,1.47,7-day click or 1-day view
+2026-08-30,Retargeting - Site Visitors,303.14,22100,361,306,46,28,19,1149.21,3.79,15.95,0.84,13.72,1.63,7-day click or 1-day view
+2026-08-30,Seasonal - Summer Offer,199.41,14358,192,162,24,15,11,676.99,3.39,18.13,1.04,13.89,1.34,7-day click or 1-day view
+2026-08-31,Prospecting - Broad,492.64,34584,519,441,64,39,28,1712.91,3.48,17.59,0.95,14.24,1.50,7-day click or 1-day view
+2026-08-31,Retargeting - Site Visitors,297.76,21215,347,300,45,27,19,1140.17,3.83,15.67,0.86,14.04,1.64,7-day click or 1-day view
+2026-08-31,Seasonal - Summer Offer,197.61,13962,191,161,25,15,10,609.81,3.09,19.76,1.03,14.15,1.37,7-day click or 1-day view
