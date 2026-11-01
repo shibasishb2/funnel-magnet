@@ -227,7 +227,7 @@ def test_findings_html_labels_each_kind_of_statement():
 
     assert "Confirmed observations" in html
     assert "Mathematical drivers" in html
-    assert "None generated" in html
+    assert "cannot show causes" in html
 
 
 def test_tree_html_marks_path_and_driver():

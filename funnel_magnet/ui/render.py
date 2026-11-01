@@ -4,7 +4,7 @@ from html import escape
 from pathlib import Path
 
 from funnel_magnet.diagnose import Status
-from funnel_magnet.ui.view import STATUS_LABELS
+from funnel_magnet.ui.view import STATUS_LABELS, metric_label
 
 STYLE_PATH = Path(__file__).with_name("style.css")
 
@@ -87,6 +87,82 @@ def _items(lines):
     return "".join(f"<li>{escape(line)}</li>" for line in lines)
 
 
+def _citations(ids, evidence):
+    known = evidence.by_id
+    items = "".join(
+        f"<li><strong>{escape(item)}</strong> {escape(known[item].statement)}</li>" for item in ids
+    )
+    return f'<details class="fm-evidence"><summary>Evidence: {escape(", ".join(ids))}</summary><ul>{items}</ul></details>'
+
+
+def _hypothesis_html(item, evidence):
+    return (
+        '<article class="fm-ai-card">'
+        f'<div class="fm-ai-card-tag">Hypothesis {item.rank} · {escape(item.confidence.capitalize())} confidence</div>'
+        f"<p>{escape(item.statement)}</p>"
+        f'<p class="fm-panel-note">Uncertainty: {escape(item.uncertainty)}</p>'
+        f"{_citations(item.evidence_ids, evidence)}"
+        "</article>"
+    )
+
+
+def _recommendation_html(item, evidence):
+    direction = {
+        "increase": "Increase",
+        "decrease": "Decrease",
+        "stabilize": "Stabilize",
+        "unclear": "Unclear",
+    }[item.expected_direction]
+    return (
+        '<article class="fm-ai-card">'
+        f'<div class="fm-ai-card-tag">Priority {item.priority} · {escape(item.action_type.capitalize())} '
+        f"· Tests hypothesis {item.hypothesis_rank}</div>"
+        f"<p>{escape(item.action)}</p>"
+        f'<p class="fm-panel-note">Expected direction for {escape(metric_label(item.target_metric))}: '
+        f"{direction}. {escape(item.expected_impact)}</p>"
+        f"{_citations(item.evidence_ids, evidence)}"
+        "</article>"
+    )
+
+
+def _information_html(items, evidence):
+    if not items:
+        return ""
+    rows = "".join(
+        f"<article class=\"fm-ai-card\"><p><strong>{escape(item.information)}</strong> "
+        f"{escape(item.reason)}</p>{_citations(item.evidence_ids, evidence)}</article>"
+        for item in items
+    )
+    return f'<div class="fm-ai-heading">Additional information needed</div>{rows}'
+
+
+def ai_diagnosis_html(result, evidence):
+    diagnosis = result.diagnosis
+    hypotheses = "".join(_hypothesis_html(item, evidence) for item in diagnosis.hypotheses)
+    recommendations = "".join(
+        _recommendation_html(item, evidence) for item in diagnosis.recommendations
+    )
+    return (
+        '<section class="fm-ai">'
+        f'<div class="fm-panel-tag">AI-generated · {escape(result.provider)} {escape(result.model)}</div>'
+        '<p class="fm-panel-note">Interpretation of the calculated evidence. Causes are not confirmed, '
+        "and every action is a suggestion for you to review.</p>"
+        '<div class="fm-ai-heading">Executive diagnosis</div>'
+        f"<p>{escape(diagnosis.executive_diagnosis)}</p>"
+        f"{_citations(diagnosis.executive_evidence_ids, evidence)}"
+        + (f'<div class="fm-ai-heading">AI-generated hypotheses</div>{hypotheses}' if hypotheses else "")
+        + (
+            f'<div class="fm-ai-heading">AI-generated recommendations</div>{recommendations}'
+            if recommendations
+            else ""
+        )
+        + _information_html(diagnosis.additional_information, evidence)
+        + '<div class="fm-ai-heading">Confidence and uncertainty</div>'
+        f"<p>{escape(diagnosis.confidence_explanation)}</p>"
+        "</section>"
+    )
+
+
 def findings_html(findings):
     needed = (
         f"<p>Evidence needed before naming a cause:</p><ul>{_items(findings.evidence_needed)}</ul>"
@@ -105,7 +181,8 @@ def findings_html(findings):
         f"<ul>{_items(findings.drivers)}</ul></section>"
         '<section class="fm-panel fm-hypotheses">'
         '<div class="fm-panel-tag">Hypotheses</div>'
-        '<p class="fm-panel-note">None generated. The data here cannot show causes.</p>'
+        '<p class="fm-panel-note">The calculations cannot show causes. Any AI-generated hypotheses '
+        "appear only in the AI diagnosis section.</p>"
         f"{needed}</section>"
         "</div>"
     )

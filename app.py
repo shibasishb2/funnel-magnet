@@ -4,8 +4,12 @@ import io
 
 import pandas as pd
 import streamlit as st
+from streamlit.errors import StreamlitSecretNotFoundError
 
 from funnel_magnet import __version__
+from funnel_magnet.ai import service
+from funnel_magnet.ai.evidence import build_evidence
+from funnel_magnet.ai.providers import AIError
 from funnel_magnet.diagnose import DEFAULT_MATERIALITY_THRESHOLD, run_diagnosis
 from funnel_magnet.periods import MONTHLY, WEEKLY, list_complete_periods
 from funnel_magnet.sources.meta import load_meta_csv
@@ -136,9 +140,79 @@ def show_data_quality(load_warnings, diagnosis):
         st.warning(f"**{group}**\n\n" + "\n".join(f"- {item}" for item in items))
 
 
-def show_dashboard(result, diagnosis, source_name, scope):
+def read_secrets():
+    """Return Streamlit secrets, or nothing when no secrets file exists."""
+    try:
+        return dict(st.secrets)
+    except (StreamlitSecretNotFoundError, FileNotFoundError):
+        return {}
+
+
+def request_ai_diagnosis(evidence, settings, key):
+    """Call the model once and keep the result for this exact evidence."""
+    runs = st.session_state.get("ai_runs", 0)
+    if runs >= service.MAX_RUNS_PER_SESSION:
+        st.warning("The AI request limit for this session has been reached.")
+        return
+
+    st.session_state["ai_runs"] = runs + 1
+    try:
+        with st.spinner("Generating AI diagnosis..."):
+            result = service.generate_diagnosis(evidence, service.create_provider(settings))
+    except AIError as error:
+        st.error(f"{error} The calculations on this page are not affected.")
+        for issue in getattr(error, "issues", []):
+            st.caption(f"Rejected: {issue}")
+        return
+    st.session_state.setdefault("ai_results", {})[key] = result
+
+
+def show_ai_diagnosis(evidence, assessable):
+    st.subheader("AI diagnosis")
+    settings = service.load_settings(read_secrets())
+    key = f"{settings.model}:{evidence.fingerprint()}"
+    results = st.session_state.get("ai_results", {})
+
+    unavailable = settings.unavailable_reason
+    if not assessable:
+        unavailable = "AI analysis needs a ROAS comparison, which isn't possible for these periods."
+    if unavailable:
+        st.info(unavailable)
+
+    # Streamlit reruns this script on every change, so only a click may call the model.
+    clicked = st.button(
+        "Generate AI Diagnosis", type="primary", disabled=bool(unavailable), key="generate-ai"
+    )
+    st.caption(
+        "Sends only the aggregated evidence below. Raw rows and campaign names are never sent, "
+        "and nothing changes in your ad account."
+    )
+    if settings.api_key and settings.tier != service.PAID_TIER:
+        st.caption(
+            "Free tier: for local development only. Apps available to users in the EEA, "
+            "Switzerland or the UK need paid Gemini use."
+        )
+
+    if clicked and key not in results:
+        request_ai_diagnosis(evidence, settings, key)
+
+    result = st.session_state.get("ai_results", {}).get(key)
+    if result:
+        st.html(render.ai_diagnosis_html(result, evidence))
+
+    with st.expander("Evidence available to the AI"):
+        st.json(evidence.payload(), expanded=False)
+
+
+def show_dashboard(result, diagnosis, source_name, scope, single_campaign):
     currency = result.currency
     prior_label, current_label = diagnosis.prior_label, diagnosis.current_label
+    evidence = build_evidence(
+        diagnosis,
+        currency,
+        [issue.message for issue in result.warnings],
+        single_campaign,
+    )
 
     st.caption(f"{source_name} · {scope} · {current_label} compared with {prior_label}")
     if not diagnosis.assessable:
@@ -161,6 +235,7 @@ def show_dashboard(result, diagnosis, source_name, scope):
     st.html(render.findings_html(view.build_findings(diagnosis, currency)))
 
     show_contributions(diagnosis)
+    show_ai_diagnosis(evidence, diagnosis.assessable)
     show_data_quality(result.warnings, diagnosis)
 
 
@@ -196,7 +271,8 @@ def main():
                     st.error(str(error))
                 else:
                     scope = settings["campaign"] or ALL_CAMPAIGNS
-                    show_dashboard(result, diagnosis, source_name, scope)
+                    single_campaign = settings["campaign"] is not None
+                    show_dashboard(result, diagnosis, source_name, scope, single_campaign)
 
     st.caption(f"ESCP MBA prototype, version {__version__}. Use synthetic or anonymized data only.")
 

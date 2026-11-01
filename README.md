@@ -2,7 +2,7 @@
 
 AI Marketing Performance Diagnostic Agent: an ESCP MBA prototype that diagnoses changes in Meta Ads performance.
 
-**Status:** Stage 2 complete. The Streamlit dashboard runs the tested diagnostic engine on uploaded files and seven sample scenarios. AI analysis, report export and deployment are not built yet.
+**Status:** Stage 3 is ready for a real API connection. The AI layer is built and tested with mocked responses, but it has not yet called the live Gemini API. Report export and deployment are not built yet.
 
 Use synthetic or anonymized data only.
 
@@ -36,6 +36,46 @@ python -m venv "$env:USERPROFILE\.venvs\funnel-magnet"
 Choose a sample scenario or upload a Meta Ads daily export in the sidebar, then choose the period type, periods, campaign and materiality threshold. The app defaults to the latest two complete periods.
 
 `funnel_magnet/ui/` only presents engine results and calculates no metrics. Screenshots are in `docs/screenshots/`.
+
+## AI diagnosis
+
+The dashboard works without an API key. **Generate AI Diagnosis** calls the model only when clicked, and the result is kept for that exact evidence. Each session allows 10 requests.
+
+### Set up a key
+
+1. Create a key on the API keys page in Google AI Studio, and restrict it to the Gemini API if that option is offered.
+2. Copy `.streamlit/secrets.toml.example` to `.streamlit/secrets.toml`, which Git ignores.
+3. Replace the placeholder with your key, then restart the app.
+
+You can set `GEMINI_API_KEY` as an environment variable instead. Never commit a key or share it in chat.
+
+| Setting | Default | Purpose |
+|---|---|---|
+| `GEMINI_API_KEY` | None | Server-side key |
+| `GEMINI_MODEL` | `gemini-3.1-flash-lite` | Model name |
+| `GEMINI_TIER` | `free` | Set to `paid` once the Google project has billing enabled |
+| `FM_SHARED_DEPLOYMENT` | `false` | Set to `true` for a shared app. AI analysis then stays off until `GEMINI_TIER` is `paid`. |
+
+### Free and paid use
+
+Google's Gemini API terms require paid use for an app made available to users in the EEA, Switzerland or the UK. Use the free tier for local development only. Before sharing the app with those users, enable billing on the Google project and set `GEMINI_TIER = "paid"` and `FM_SHARED_DEPLOYMENT = "true"`. These settings don't check billing, so confirm it in Google's console.
+
+Google's free-tier terms differ from its paid terms on how data may be used, so don't send real client data through the free tier.
+
+### What is sent and checked
+
+`funnel_magnet/ai/evidence.py` builds the only input the model receives: calculated metrics, drivers, tree paths, data warnings and information gaps, each with a fact ID. CSV rows, campaign names and file names are never sent.
+
+`funnel_magnet/ai/validate.py` rejects the whole response if it cites an unknown or missing fact, contains a number that isn't in the evidence, names a metric that isn't in the evidence, or presents a cause as established. Hypotheses must stay on the diagnostic path, cite their own metric and be worded as possibilities. Confidence can only be low or medium.
+
+To use another provider, add a class with `generate()` to `funnel_magnet/ai/providers.py` and return it from `create_provider()` in `funnel_magnet/ai/service.py`.
+
+### Limitations
+
+- Tests use mocked responses, so the live API, its schema handling and real response quality are unverified until a key is added.
+- The validator uses rules and word patterns, so it can reject a sound response or miss an unusual unsupported claim. A number that happens to match the evidence also passes.
+- Rejected responses aren't retried automatically, because each attempt uses quota.
+- AI output is a suggestion for a person to review. The app never changes an ad account.
 
 ## Diagnostic engine
 

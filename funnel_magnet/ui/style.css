@@ -146,6 +146,28 @@
   font-size: 0.9rem;
 }
 .fm-hypotheses { border-top: 3px dashed var(--fm-muted); background: var(--fm-soft); }
+.fm-ai {
+  background: var(--fm-soft);
+  border: 1px solid var(--fm-line);
+  border-top: 3px dashed var(--fm-muted);
+  border-radius: 8px;
+  padding: 12px 14px;
+  color: var(--fm-text);
+  font-size: 0.9rem;
+}
+.fm-ai p { margin-bottom: 6px; }
+.fm-ai-heading { color: var(--fm-ink); font-weight: 700; margin: 12px 0 6px; }
+.fm-ai-card {
+  background: var(--fm-surface);
+  border: 1px solid var(--fm-line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+.fm-ai-card-tag { color: var(--fm-muted); font-size: 0.8rem; font-weight: 600; margin-bottom: 4px; }
+.fm-evidence { color: var(--fm-muted); font-size: 0.82rem; }
+.fm-evidence summary { cursor: pointer; }
+.fm-evidence ul { margin: 4px 0 0; padding-left: 18px; }
 .fm-panel-tag { color: var(--fm-ink); font-weight: 700; }
 .fm-panel-note { color: var(--fm-muted); font-size: 0.82rem; margin: 0 0 8px; }
 .fm-panel ul { margin: 0; padding-left: 18px; }
