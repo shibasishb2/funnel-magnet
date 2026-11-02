@@ -165,6 +165,15 @@
   margin-bottom: 8px;
 }
 .fm-ai-card-tag { color: var(--fm-muted); font-size: 0.8rem; font-weight: 600; margin-bottom: 4px; }
+.fm-ai-withheld {
+  background: var(--fm-surface);
+  border: 1px solid var(--fm-line);
+  border-left: 4px solid #b45309;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 8px 0;
+}
+.fm-ai-withheld ul { margin: 6px 0 0; padding-left: 18px; }
 .fm-evidence { color: var(--fm-muted); font-size: 0.82rem; }
 .fm-evidence summary { cursor: pointer; }
 .fm-evidence ul { margin: 4px 0 0; padding-left: 18px; }

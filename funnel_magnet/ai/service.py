@@ -9,7 +9,7 @@ from funnel_magnet.ai.normalize import normalize_diagnosis
 from funnel_magnet.ai.prompt import SYSTEM_PROMPT, build_user_prompt
 from funnel_magnet.ai.providers import AIError, AIResponseError, GeminiProvider
 from funnel_magnet.ai.schema import AIDiagnosis
-from funnel_magnet.ai.validate import validate_diagnosis
+from funnel_magnet.ai.validate import keep_valid_sections, validate_diagnosis
 
 DEFAULT_MODEL = "gemini-3.1-flash-lite"
 FREE_TIER = "free"
@@ -50,6 +50,7 @@ class AIResult:
     input_tokens: int | None
     output_tokens: int | None
     notes: tuple[str, ...] | list[str] = ()
+    withheld: tuple[str, ...] | list[str] = ()
 
 
 def load_settings(secrets=None):
@@ -73,7 +74,11 @@ def create_provider(settings):
 
 
 def generate_diagnosis(evidence, provider):
-    """Ask the model to interpret the evidence. Only validated output is returned."""
+    """Ask the model to interpret the evidence. Only sections that pass are returned.
+
+    The result lists what was withheld. A response with no valid hypothesis or
+    recommendation is rejected.
+    """
     response = provider.generate(SYSTEM_PROMPT, build_user_prompt(evidence), AIDiagnosis)
 
     try:
@@ -83,11 +88,18 @@ def generate_diagnosis(evidence, provider):
 
     diagnosis, notes = normalize_diagnosis(diagnosis, evidence)
     issues = validate_diagnosis(diagnosis, evidence)
-    if issues:
+    verified = keep_valid_sections(diagnosis, evidence)
+    if issues and not (verified.hypotheses or verified.recommendations):
         raise AIResponseError("The AI response was rejected because it failed the evidence checks.", issues)
 
     return AIResult(
-        diagnosis, provider.name, provider.model, response.input_tokens, response.output_tokens, notes
+        verified,
+        provider.name,
+        provider.model,
+        response.input_tokens,
+        response.output_tokens,
+        notes,
+        issues,
     )
 
 

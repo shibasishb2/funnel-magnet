@@ -65,6 +65,10 @@ class EvidencePack:
     def metrics(self):
         return {fact.metric for fact in self.facts if fact.kind == "metric"}
 
+    @property
+    def campaign_data_available(self):
+        return any("campaign" in check for check in self.context.get("checks_available_in_uploaded_data", ()))
+
     def allowed_numbers(self):
         """Return (numbers in the evidence, whole percentages they round to).
 

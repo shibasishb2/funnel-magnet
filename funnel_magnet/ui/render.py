@@ -107,7 +107,7 @@ def _hypothesis_html(item, evidence):
     )
 
 
-def _recommendation_html(item, evidence):
+def _recommendation_html(item, evidence, shown_ranks):
     direction = {
         "increase": "Increase",
         "decrease": "Decrease",
@@ -115,10 +115,12 @@ def _recommendation_html(item, evidence):
         "unclear": "Unclear",
     }[item.expected_direction]
     source = "Uploaded data" if item.check_source == "uploaded_data" else "External data"
+    link = f"Tests hypothesis {item.hypothesis_rank}"
+    if item.hypothesis_rank not in shown_ranks:
+        link += " (withheld)"
     return (
         '<article class="fm-ai-card">'
-        f'<div class="fm-ai-card-tag">Priority {item.priority} · {source} '
-        f"· Tests hypothesis {item.hypothesis_rank}</div>"
+        f'<div class="fm-ai-card-tag">Priority {item.priority} · {source} · {link}</div>'
         f"<p><strong>{escape(item.investigation)}</strong></p>"
         f"<p><strong>What to check:</strong> {escape(item.what_to_check)}</p>"
         f"<p><strong>If supported:</strong> {escape(item.if_supported)}</p>"
@@ -150,17 +152,30 @@ def _adjustments_html(notes):
     )
 
 
+def _withheld_html(issues):
+    if not issues:
+        return ""
+    return (
+        '<div class="fm-ai-withheld" role="alert">'
+        "<strong>Partly verified.</strong> Some AI sections failed the evidence checks and are "
+        f"withheld. Only the sections shown here passed.<ul>{_items(issues)}</ul></div>"
+    )
+
+
 def ai_diagnosis_html(result, evidence):
     diagnosis = result.diagnosis
+    shown_ranks = {item.rank for item in diagnosis.hypotheses}
     hypotheses = "".join(_hypothesis_html(item, evidence) for item in diagnosis.hypotheses)
     recommendations = "".join(
-        _recommendation_html(item, evidence) for item in diagnosis.recommendations
+        _recommendation_html(item, evidence, shown_ranks) for item in diagnosis.recommendations
     )
+    explanation = diagnosis.confidence_explanation
     return (
         '<section class="fm-ai">'
         f'<div class="fm-panel-tag">AI-generated · {escape(result.provider)} {escape(result.model)}</div>'
         '<p class="fm-panel-note">Interpretation of the calculated evidence. Causes are not confirmed, '
         "and every action is a suggestion for you to review.</p>"
+        + _withheld_html(result.withheld)
         + (f'<div class="fm-ai-heading">AI-generated hypotheses</div>{hypotheses}' if hypotheses else "")
         + (
             f'<div class="fm-ai-heading">AI-generated recommendations</div>{recommendations}'
@@ -168,8 +183,11 @@ def ai_diagnosis_html(result, evidence):
             else ""
         )
         + _information_html(diagnosis.additional_information, evidence)
-        + '<div class="fm-ai-heading">Confidence and uncertainty</div>'
-        f"<p>{escape(diagnosis.confidence_explanation)}</p>"
+        + (
+            f'<div class="fm-ai-heading">Confidence and uncertainty</div><p>{escape(explanation)}</p>'
+            if explanation
+            else ""
+        )
         + _adjustments_html(result.notes)
         + "</section>"
     )

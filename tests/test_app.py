@@ -224,6 +224,7 @@ def test_failed_request_keeps_the_dashboard_working(monkeypatch):
 def test_rejected_reply_is_not_displayed(monkeypatch):
     reply = json.loads(good_reply())
     reply["hypotheses"][0]["evidence_ids"] = ["M99"]
+    reply["recommendations"] = []
     app = start_with_key(monkeypatch, CountingProvider(json.dumps(reply)))
 
     generate_button(app).click()
@@ -232,6 +233,21 @@ def test_rejected_reply_is_not_displayed(monkeypatch):
     assert any("failed the evidence checks" in item.value for item in app.error)
     assert "Delivery costs may have risen." not in page_text(app)
     assert any("M99" in item.value for item in app.caption)
+
+
+def test_partly_valid_reply_flags_what_was_withheld(monkeypatch):
+    reply = json.loads(good_reply())
+    reply["hypotheses"][0]["evidence_ids"] = ["M99"]
+    app = start_with_key(monkeypatch, CountingProvider(json.dumps(reply)))
+
+    generate_button(app).click()
+    app.run()
+
+    text = page_text(app)
+    assert not app.exception and not app.error
+    assert "Partly verified" in text and "M99" in text
+    assert "Delivery costs may have risen." not in text
+    assert "AI-generated recommendations" in text
 
 
 def test_session_limit_stops_further_calls(monkeypatch):

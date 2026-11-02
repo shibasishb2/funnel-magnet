@@ -772,6 +772,8 @@ def test_statements_that_the_cause_is_unknown_are_accepted(text):
         "CPM may have risen because of auction competition, or a shift in campaign mix.",
         "Costs could reflect a campaign mix shift or an increase in competition.",
         "Costs may be higher due to competition or due to seasonality.",
+        "Costs may reflect heightened market competition or seasonal fluctuations.",
+        "Spend may have moved toward more expensive audiences or placements.",
     ],
 )
 def test_combined_business_causes_are_rejected(text):
@@ -780,14 +782,9 @@ def test_combined_business_causes_are_rejected(text):
     assert any("more than one business cause" in issue for issue in issues)
 
 
-@pytest.mark.parametrize(
-    "text",
-    [
-        "Costs may have risen for more expensive audiences or placements.",
-        "Delivery may have moved toward one campaign.",
-    ],
-)
-def test_one_cause_with_alternatives_in_scope_is_accepted(text):
+def test_one_business_cause_is_accepted():
+    text = "Delivery may have moved toward one campaign."
+
     assert issues_for(edit(["hypotheses", 0, "unverified_business_cause"], text)) == []
 
 
@@ -803,6 +800,117 @@ def test_separate_causes_as_separate_hypotheses_are_accepted():
 def test_the_prompt_requires_one_cause_and_concrete_actions():
     assert "exactly one business cause" in SYSTEM_PROMPT
     assert "focus optimization efforts" in SYSTEM_PROMPT
+
+
+# Conditional next steps
+
+
+@pytest.mark.parametrize("field", ["if_supported", "if_not_supported"])
+def test_conditional_step_can_name_a_cause(field):
+    text = "Adjust expectations for ROAS based on the current competitive landscape."
+
+    assert issues_for(edit(["recommendations", 0, field], text)) == []
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "The drop was caused by competition.",
+        "This proves the auction changed.",
+        "Expect 77 more sales.",
+    ],
+)
+@pytest.mark.parametrize("field", ["if_supported", "if_not_supported"])
+def test_conditional_step_keeps_the_factual_checks(field, text):
+    assert issues_for(edit(["recommendations", 0, field], text))
+
+
+def test_named_cause_outside_a_conditional_step_is_still_rejected():
+    text = "Competition has changed."
+
+    assert issues_for(edit(["recommendations", 0, "expected_impact"], text))
+
+
+# Campaign data
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        ["confidence_explanation"],
+        ["hypotheses", 0, "uncertainty"],
+    ],
+)
+def test_available_campaign_data_cannot_be_called_missing(path):
+    issues = issues_for(edit(path, "Confidence is low because this lacks campaign-level data."))
+
+    assert any("campaign-level data as missing" in issue for issue in issues)
+
+
+def test_available_campaign_data_cannot_be_listed_as_needed():
+    issues = issues_for(edit(["additional_information", 0, "information"], "Campaign-level splits."))
+
+    assert any("campaign-level data as missing" in issue for issue in issues)
+
+
+def test_unchecked_campaign_data_is_accepted():
+    text = "Confidence is low because campaign-level results have not been checked yet."
+
+    assert issues_for(edit(["confidence_explanation"], text)) == []
+
+
+def test_campaign_data_rule_needs_several_campaigns():
+    result = load_meta_csv(SAMPLES[0].path)
+    campaign = result.data["campaign"].iloc[0]
+    evidence = build_evidence(run_diagnosis(result.data, WEEKLY, campaign=campaign), result.currency, (), True)
+
+    assert not evidence.campaign_data_available
+
+
+def test_prompt_says_uploaded_data_is_not_missing():
+    assert "Never describe it as" in SYSTEM_PROMPT
+
+
+# Replay of the final live Gemini response, stored as a fixture
+
+
+def final_live_reply():
+    path = Path(__file__).parent / "fixtures" / "live_response_final_cpm_inflation.json"
+    return path.read_text("utf-8")
+
+
+def final_live_result():
+    return service.generate_diagnosis(evidence_for(), FakeProvider(final_live_reply()))
+
+
+def test_final_live_response_keeps_only_its_valid_sections():
+    diagnosis = final_live_result().diagnosis
+
+    assert diagnosis.hypotheses == []
+    assert diagnosis.confidence_explanation == ""
+    assert [item.priority for item in diagnosis.recommendations] == [1, 2]
+    assert len(diagnosis.additional_information) == 3
+
+
+def test_final_live_response_reports_its_three_problems():
+    withheld = final_live_result().withheld
+
+    assert len(withheld) == 3
+    assert sum("more than one business cause" in issue for issue in withheld) == 2
+    assert any("campaign-level data as missing" in issue for issue in withheld)
+    assert not any("names a cause as fact" in issue for issue in withheld)
+
+
+def test_final_live_response_display_hides_rejected_text():
+    evidence = evidence_for()
+    html = render.ai_diagnosis_html(final_live_result(), evidence)
+
+    assert "Partly verified" in html
+    assert "CPM by campaign for the current and prior period." in html
+    assert "Tests hypothesis 2 (withheld)" in html
+    assert "heightened market competition" not in html
+    assert "expensive audiences" not in html
+    assert "campaign-level splits" not in html
 
 
 # Replay of the third live Gemini response, stored as a fixture
@@ -867,13 +975,71 @@ def test_malformed_replies_are_rejected(text):
         service.generate_diagnosis(evidence_for(), FakeProvider(text))
 
 
-def test_rejected_reply_lists_the_reasons():
+def test_reply_with_nothing_valid_is_rejected_with_its_reasons():
     reply = edit(["hypotheses", 0, "evidence_ids"], ["M99"])
+    reply["recommendations"] = []
 
     with pytest.raises(AIResponseError) as caught:
         service.generate_diagnosis(evidence_for(), FakeProvider(json.dumps(reply)))
 
     assert any("M99" in issue for issue in caught.value.issues)
+
+
+def test_invalid_hypothesis_is_withheld_and_valid_sections_stay():
+    reply = edit(["hypotheses", 0, "evidence_ids"], ["M99"])
+
+    result = service.generate_diagnosis(evidence_for(), FakeProvider(json.dumps(reply)))
+
+    assert result.diagnosis.hypotheses == []
+    assert len(result.diagnosis.recommendations) == 2
+    assert any("M99" in issue for issue in result.withheld)
+
+
+def test_only_the_invalid_recommendation_is_withheld():
+    reply = edit(["recommendations", 1, "if_supported"], "Expect 77 more sales.")
+
+    result = service.generate_diagnosis(evidence_for(), FakeProvider(json.dumps(reply)))
+
+    assert [item.priority for item in result.diagnosis.recommendations] == [1]
+    assert len(result.diagnosis.hypotheses) == 1
+    assert any("77" in issue for issue in result.withheld)
+
+
+def test_invalid_confidence_explanation_is_withheld():
+    reply = edit(["confidence_explanation"], "This proves the auction changed.")
+    evidence = evidence_for()
+
+    result = service.generate_diagnosis(evidence, FakeProvider(json.dumps(reply)))
+    html = render.ai_diagnosis_html(result, evidence)
+
+    assert result.diagnosis.confidence_explanation == ""
+    assert "This proves" not in html and "Confidence and uncertainty" not in html
+
+
+def test_clean_reply_withholds_nothing():
+    result = service.generate_diagnosis(evidence_for(), FakeProvider(json.dumps(valid_reply())))
+
+    assert result.withheld == []
+
+
+def test_withheld_sections_are_flagged_and_never_shown():
+    reply = edit(["hypotheses", 0, "unverified_business_cause"], "Rivals or seasonality may matter.")
+    evidence = evidence_for()
+
+    result = service.generate_diagnosis(evidence, FakeProvider(json.dumps(reply)))
+    html = render.ai_diagnosis_html(result, evidence)
+
+    assert "Partly verified" in html
+    assert "Rivals or seasonality" not in html
+    assert "more than one business cause" in html
+    assert "Tests hypothesis 1 (withheld)" in html
+
+
+def test_clean_reply_is_not_flagged():
+    evidence = evidence_for()
+    result = service.generate_diagnosis(evidence, FakeProvider(json.dumps(valid_reply())))
+
+    assert "Partly verified" not in render.ai_diagnosis_html(result, evidence)
 
 
 def test_failed_request_propagates_as_an_ai_error():

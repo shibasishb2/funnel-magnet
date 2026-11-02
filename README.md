@@ -2,7 +2,7 @@
 
 AI Marketing Performance Diagnostic Agent: an ESCP MBA prototype that diagnoses changes in Meta Ads performance.
 
-**Status:** Stage 3 is built. Three live Gemini tests returned valid structured output, but none passed validation. Python now writes the mathematical diagnosis, and a normalizer handles harmless differences. This latest version has only been tested with mocked responses and a stored live response. Report export and deployment are not built yet.
+**Status:** Stage 3 is complete. Python writes the mathematical diagnosis, and Gemini only interprets it. No live Gemini response has passed every check, so the app shows the sections that pass and flags the rest. This latest version was tested with mocked responses and stored live responses, not a new live call. Report export and deployment are not built yet.
 
 Use synthetic or anonymized data only.
 
@@ -68,7 +68,9 @@ Python writes the mathematical diagnosis from the decision tree and contribution
 
 `funnel_magnet/ai/evidence.py` builds the only input the model receives: the mathematical diagnosis, calculated metrics, drivers, tree paths, data warnings, information gaps and the checks available in the uploaded data, with fact IDs on every fact. CSV rows, campaign names and file names are never sent.
 
-`funnel_magnet/ai/validate.py` rejects the whole response if it cites an unknown or missing fact, contains a number that isn't in the evidence, names a metric that isn't in the evidence, or presents a cause as established. Hypotheses must stay on the diagnostic path, keep mathematical evidence apart from the unverified business cause, and hold one business cause each. Statements that a cause is unknown, or that evidence is missing, are allowed. Each wording problem is reported once per sentence.
+`funnel_magnet/ai/validate.py` checks each section of the response. A section fails if it cites an unknown or missing fact, contains a number that isn't in the evidence, names a metric that isn't in the evidence, or presents a cause as established. Hypotheses must stay on the diagnostic path, keep mathematical evidence apart from the unverified business cause, and hold one business cause each, so "X or Y" fails. Statements that a cause is unknown, or that evidence is missing, are allowed, but campaign-level data can't be called missing when the upload has it. "If supported" and "if not supported" steps may name a possible cause, because they only apply if the check holds, and they must still pass the number, proof and definite-cause checks. Each wording problem is reported once per sentence.
+
+A section that fails is withheld, and its text is never shown. The panel is marked "Partly verified" and lists each reason. A recommendation that passes stays visible even if its hypothesis was withheld, and it is labelled as such. If no hypothesis or recommendation passes, the whole response is rejected.
 
 `funnel_magnet/ai/normalize.py` runs first and fixes harmless differences, listing each change under "Adjusted by the app":
 
@@ -84,7 +86,7 @@ To use another provider, add a class with `generate()` to `funnel_magnet/ai/prov
 
 - Automated tests use mocked responses. Response quality and acceptance rates on the live API still need testing.
 - The validator uses rules and word patterns, so it can reject a sound response or miss an unusual unsupported claim. A number that happens to match the evidence also passes.
-- The check for two causes in one hypothesis looks for joining patterns, so some combined causes can pass. Whether actions are concrete is requested in the prompt, not enforced.
+- The check for two causes in one hypothesis looks for the word "or", so causes joined by "and" can pass, and one cause worded with "or" is withheld. Whether actions are concrete is requested in the prompt, not enforced.
 - Rejected responses aren't retried automatically, because each attempt uses quota.
 - AI output is a suggestion for a person to review. The app never changes an ad account.
 

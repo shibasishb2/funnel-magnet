@@ -36,6 +36,8 @@ Rules:
 5. Use "low" confidence unless a hypothesis cites a separate lowest-level metric
    that moved materially. Citing the metric itself, or its parent metrics, is not
    direct support. "medium" is the highest level allowed.
+6. Anything in checks_available_in_uploaded_data is available. Never describe it as
+   missing. Say it has not been checked yet.
 
 Hypotheses:
 Return up to three hypotheses, ranked 1 upward, most important first, where the
