@@ -2,11 +2,27 @@
 
 AI Marketing Performance Diagnostic Agent: an ESCP MBA prototype that diagnoses changes in Meta Ads performance.
 
-**Status:** Stage 3 is complete. Python writes the mathematical diagnosis, and Gemini only interprets it. No live Gemini response has passed every check, so the app shows the sections that pass and flags the rest. This latest version was tested with mocked responses and stored live responses, not a new live call. Stage 4 adds a downloadable HTML report. Deployment is not built yet.
+**Status:** Stages 0 to 4 are complete, and the project is prepared for Streamlit Community Cloud. Python writes the mathematical diagnosis, and Gemini only interprets it. AI analysis is off by default. No live Gemini response has passed every check, so the app shows the sections that pass and flags the rest.
 
 Use synthetic or anonymized data only.
 
-## Run the app
+Results are decision support for a person to review. They are not automatically verified causal conclusions.
+
+## Academic prototype and future product
+
+This repository is the academic prototype, built for an ESCP MBA assignment. A commercial Funnel Magnet product does not exist yet. The right column lists possible directions, not commitments.
+
+| | Academic prototype (this repository) | Possible future commercial product |
+|---|---|---|
+| Purpose | Show the diagnostic method | Support paying clients' marketing decisions |
+| Data | Synthetic or anonymized Meta Ads CSV files | Client data, under suitable contracts and privacy terms |
+| Connections | Manual CSV upload | Possible Meta API and other ad platforms |
+| AI | Off by default, and validated with rules | Paid-tier use with stronger safeguards and evaluation |
+| Access | Open link with no accounts | Accounts, subscriptions and payments |
+| Reports | Downloadable HTML | To be decided |
+| Support | None, and no service guarantee | To be decided |
+
+## Run the app locally
 
 Double-click `run.bat`, or run this from the project folder:
 
@@ -24,33 +40,58 @@ The app opens at http://localhost:8501. Press `Ctrl+C` in the terminal to stop i
 
 ## Set up on a new machine
 
-The virtual environment is kept outside this folder because the folder syncs to OneDrive.
+This needs Python 3.12. Keep the virtual environment outside any cloud-synced folder.
 
 ```powershell
 python -m venv "$env:USERPROFILE\.venvs\funnel-magnet"
 & "$env:USERPROFILE\.venvs\funnel-magnet\Scripts\python.exe" -m pip install -r requirements-dev.txt
 ```
 
+## Deploy to Streamlit Community Cloud
+
+`requirements.txt` holds only what the app needs at run time. Test tools are in `requirements-dev.txt`.
+
+1. Push this repository to GitHub.
+2. In Streamlit Community Cloud, create an app from the repository, on branch `main`, with `app.py` as the main file.
+3. Under Advanced settings, choose Python 3.12.
+4. Leave Secrets empty, then deploy.
+
+With no secrets, the app stays fully usable for sample scenarios, CSV upload, the dashboard and report downloads, and it cannot call Gemini. Never add a key to a file in the repository.
+
+Uploads are limited to 20 MB. Community Cloud apps can sleep when unused, so open the link shortly before a demonstration.
+
+To switch AI on later, first enable billing on the Google project and confirm it in Google's console. Then add these under the app's Secrets settings:
+
+```toml
+FM_AI_ENABLED = "true"
+GEMINI_API_KEY = "your-key"
+GEMINI_TIER = "paid"
+FM_SHARED_DEPLOYMENT = "true"
+```
+
+The only spending safeguard in the app is the limit of 10 requests per browser session. It doesn't limit total use across visitors, so set a budget alert in Google Cloud and add stronger limits before enabling AI publicly.
+
 ## Dashboard
 
 Choose a sample scenario or upload a Meta Ads daily export in the sidebar, then choose the period type, periods, campaign and materiality threshold. The app defaults to the latest two complete periods.
 
-`funnel_magnet/ui/` only presents engine results and calculates no metrics. Screenshots are in `docs/screenshots/`.
+`funnel_magnet/ui/` only presents engine results and calculates no metrics. Screenshots in `docs/screenshots/` come from earlier stages, so the current layout differs slightly.
 
 ## AI diagnosis
 
-The dashboard works without an API key. **Generate AI Diagnosis** calls the model only when clicked, and the result is kept for that exact evidence. Each session allows 10 requests.
+The dashboard works without AI. AI analysis stays off until `FM_AI_ENABLED` is `true`, even if a key is present. **Generate AI Diagnosis** calls the model only when clicked, and the result is kept for that exact evidence. Each session allows 10 requests.
 
 ### Set up a key
 
 1. Create a key on the API keys page in Google AI Studio, and restrict it to the Gemini API if that option is offered.
 2. Copy `.streamlit/secrets.toml.example` to `.streamlit/secrets.toml`, which Git ignores.
-3. Replace the placeholder with your key, then restart the app.
+3. Replace the placeholder with your key, keep `FM_AI_ENABLED = "true"`, then restart the app.
 
-You can set `GEMINI_API_KEY` as an environment variable instead. Never commit a key or share it in chat.
+You can set these as environment variables instead. Never commit a key or share it in chat.
 
 | Setting | Default | Purpose |
 |---|---|---|
+| `FM_AI_ENABLED` | `false` | Must be `true` before any live AI call is possible |
 | `GEMINI_API_KEY` | None | Server-side key |
 | `GEMINI_MODEL` | `gemini-3.1-flash-lite` | Model name |
 | `GEMINI_TIER` | `free` | Set to `paid` once the Google project has billing enabled |

@@ -16,6 +16,10 @@ FREE_TIER = "free"
 PAID_TIER = "paid"
 MAX_RUNS_PER_SESSION = 10
 
+AI_OFF_MESSAGE = (
+    "AI analysis is switched off in this deployment. The calculations, dashboard and report "
+    "all work without it."
+)
 NO_KEY_MESSAGE = (
     "AI analysis is unavailable because no API key is configured. "
     "The calculations on this page are not affected."
@@ -32,9 +36,13 @@ class AISettings:
     model: str
     tier: str
     shared_deployment: bool
+    enabled: bool = False
 
     @property
     def unavailable_reason(self):
+        # Off unless switched on, so adding a key alone can never start live calls.
+        if not self.enabled:
+            return AI_OFF_MESSAGE
         if not self.api_key:
             return NO_KEY_MESSAGE
         if self.shared_deployment and self.tier != PAID_TIER:
@@ -66,6 +74,7 @@ def load_settings(secrets=None):
         model=read("GEMINI_MODEL", DEFAULT_MODEL),
         tier=read("GEMINI_TIER", FREE_TIER).lower(),
         shared_deployment=read("FM_SHARED_DEPLOYMENT", "false").lower() == "true",
+        enabled=read("FM_AI_ENABLED", "false").lower() == "true",
     )
 
 

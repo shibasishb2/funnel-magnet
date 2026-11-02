@@ -76,6 +76,7 @@ class CountingProvider:
 def start_with_key(monkeypatch, provider):
     monkeypatch.setattr(service, "create_provider", lambda settings: provider)
     app = AppTest.from_file("../app.py", default_timeout=30)
+    app.secrets["FM_AI_ENABLED"] = "true"
     app.secrets["GEMINI_API_KEY"] = "test-only"
     return app.run()
 
@@ -146,7 +147,8 @@ def test_app_opens_on_a_sample_without_errors():
 
 def test_without_a_key_the_button_is_off_and_the_dashboard_works(monkeypatch):
     load_settings = service.load_settings
-    monkeypatch.setattr(service, "load_settings", lambda secrets=None: load_settings({}))
+    enabled = {"FM_AI_ENABLED": "true"}
+    monkeypatch.setattr(service, "load_settings", lambda secrets=None: load_settings(enabled))
 
     app = start()
 
@@ -251,6 +253,54 @@ def test_partly_valid_reply_flags_what_was_withheld(monkeypatch):
     assert "AI-generated recommendations" in text
 
 
+def test_a_key_alone_does_not_switch_ai_on(monkeypatch):
+    provider = CountingProvider(good_reply())
+    monkeypatch.setattr(service, "create_provider", lambda settings: provider)
+    app = AppTest.from_file("../app.py", default_timeout=30)
+    app.secrets["GEMINI_API_KEY"] = "test-only"
+    app.run()
+
+    assert generate_button(app).disabled
+    assert any("switched off" in item.value for item in app.info)
+    assert provider.calls == 0
+
+
+def test_public_defaults_keep_every_core_feature_working(monkeypatch):
+    load_settings = service.load_settings
+    monkeypatch.setattr(service, "load_settings", lambda secrets=None: load_settings({}))
+
+    app = start()
+
+    assert not app.exception
+    assert generate_button(app).disabled
+    assert download_button(app)
+    assert any(view.DECISION_SUPPORT_NOTICE == item.value for item in app.info)
+
+
+def test_csv_upload_works_with_ai_off():
+    rows = [
+        f"2026-06-{day:02d},Campaign A,100,10000,200,10,500"
+        for day in range(1, 29)
+    ]
+    app = upload(start(), "\n".join([HEADER, *rows]) + "\n")
+
+    assert not app.exception
+    assert download_button(app)
+
+
+def test_dashboard_warns_about_recommendations_on_withheld_hypotheses(monkeypatch):
+    reply = json.loads(good_reply())
+    reply["hypotheses"][0]["evidence_ids"] = ["M99"]
+    app = start_with_key(monkeypatch, CountingProvider(json.dumps(reply)))
+
+    generate_button(app).click()
+    app.run()
+
+    text = page_text(app)
+    assert "Tests hypothesis 1 (withheld)" in text
+    assert "not a validated conclusion" in text
+
+
 def capture_reports(monkeypatch):
     """Keep every report the app builds, because a download button hides its data."""
     built, real = [], report.build_report
@@ -317,6 +367,7 @@ def test_report_never_contains_the_key(monkeypatch):
     built = capture_reports(monkeypatch)
     monkeypatch.setattr(service, "create_provider", lambda settings: CountingProvider(good_reply()))
     app = AppTest.from_file("../app.py", default_timeout=30)
+    app.secrets["FM_AI_ENABLED"] = "true"
     app.secrets["GEMINI_API_KEY"] = "secret-sentinel-value"
     app.run()
     generate_button(app).click()

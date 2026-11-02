@@ -38,6 +38,11 @@ STATUS_LABELS = {
 
 UNDEFINED = "n/a"
 
+DECISION_SUPPORT_NOTICE = (
+    "Funnel Magnet provides decision support. Its results show what changed and suggest checks "
+    "for a person to review. They are not automatically verified causal conclusions."
+)
+
 # First match wins, so the funnel group is checked before the generic ones.
 WARNING_GROUPS = (
     ("Funnel data", ("funnel", "stage", "above 100%", *OPTIONAL_STAGES)),

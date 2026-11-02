@@ -1,8 +1,15 @@
 [browser]
 gatherUsageStats = false
 
+[client]
+# Visitors see the error type only, never a traceback with server paths.
+showErrorDetails = "type"
+toolbarMode = "viewer"
+
 [server]
 headless = true
+# Megabytes. A Meta Ads daily export is far smaller.
+maxUploadSize = 20
 
 [theme]
 base = "light"

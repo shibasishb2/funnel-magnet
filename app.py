@@ -22,7 +22,8 @@ ALL_CAMPAIGNS = "All campaigns"
 GRANULARITIES = {"Weekly": WEEKLY, "Monthly": MONTHLY}
 
 
-@st.cache_data(show_spinner=False)
+# The cache is shared by every visitor, so keep it small on a public server.
+@st.cache_data(show_spinner=False, max_entries=20)
 def load_data(raw, blank_actions_as_zero):
     return load_meta_csv(io.BytesIO(raw), blank_actions_as_zero=blank_actions_as_zero)
 
@@ -188,7 +189,7 @@ def show_ai_diagnosis(evidence, assessable):
         "Sends only the aggregated evidence below. Raw rows and campaign names are never sent, "
         "and nothing changes in your ad account."
     )
-    if settings.api_key and settings.tier != service.PAID_TIER:
+    if not settings.unavailable_reason and settings.tier != service.PAID_TIER:
         st.caption(
             "Free tier: for local development only. Apps available to users in the EEA, "
             "Switzerland or the UK need paid Gemini use."
@@ -281,6 +282,7 @@ def main():
     st.set_page_config(page_title="Funnel Magnet", layout="wide")
     st.html(render.style_tag())
     st.html(render.header_html())
+    st.info(view.DECISION_SUPPORT_NOTICE)
 
     selected = select_source()
     st.sidebar.header("Data settings")

@@ -13,7 +13,7 @@ from funnel_magnet import __version__
 from funnel_magnet.ai.evidence import EvidencePack
 from funnel_magnet.diagnose import Diagnosis
 from funnel_magnet.ui import view
-from funnel_magnet.ui.render import STATUS_CLASSES, STATUS_ICONS, _items
+from funnel_magnet.ui.render import STATUS_CLASSES, STATUS_ICONS, WITHHELD_LINK_WARNING, _items
 
 STYLE_PATH = Path(__file__).with_name("report.css")
 
@@ -243,12 +243,7 @@ def _recommendation_html(item, evidence, shown_ranks):
     source = "Uploaded data" if item.check_source == "uploaded_data" else "External data"
     withheld = item.hypothesis_rank not in shown_ranks
     link = f"Tests hypothesis {item.hypothesis_rank}" + (" (withheld)" if withheld else "")
-    warning = (
-        '<p class="card-warning">The hypothesis behind this check failed the evidence checks and '
-        "is withheld. Treat this as a suggested check, not a validated conclusion.</p>"
-        if withheld
-        else ""
-    )
+    warning = f'<p class="card-warning">{WITHHELD_LINK_WARNING}</p>' if withheld else ""
     return (
         '<article class="card">'
         f'<div class="card-tag">Priority {item.priority} · {source} · {link}</div>{warning}'
@@ -370,7 +365,9 @@ def build_report(item):
         '<header><div class="brand">Funnel Magnet</div>'
         '<div class="tagline">Marketing Performance Diagnostic Agent</div>'
         "<h1>Meta Ads Diagnostic Report</h1></header>"
-        f"{_details_html(item)}{_withheld_alert(item.ai_result)}{_legend()}"
+        f"{_details_html(item)}"
+        f'<p class="notice">{escape(view.DECISION_SUPPORT_NOTICE)}</p>'
+        f"{_withheld_alert(item.ai_result)}{_legend()}"
         f"{_diagnosis_section(item)}{_observations_section(item)}{_drivers_section(item)}"
         f"{_funnel_section(item)}{_ai_sections(item)}"
         f"{_quality_section(item, first_free)}{_method_section(first_free + 1)}"

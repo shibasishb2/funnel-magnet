@@ -8,6 +8,11 @@ from funnel_magnet.ui.view import STATUS_LABELS, metric_label
 
 STYLE_PATH = Path(__file__).with_name("style.css")
 
+WITHHELD_LINK_WARNING = (
+    "The hypothesis behind this check failed the evidence checks and is withheld. Treat this as "
+    "a suggested check, not a validated conclusion."
+)
+
 STATUS_CLASSES = {
     Status.IMPROVED: "better",
     Status.DETERIORATED: "worse",
@@ -115,12 +120,12 @@ def _recommendation_html(item, evidence, shown_ranks):
         "unclear": "Unclear",
     }[item.expected_direction]
     source = "Uploaded data" if item.check_source == "uploaded_data" else "External data"
-    link = f"Tests hypothesis {item.hypothesis_rank}"
-    if item.hypothesis_rank not in shown_ranks:
-        link += " (withheld)"
+    withheld = item.hypothesis_rank not in shown_ranks
+    link = f"Tests hypothesis {item.hypothesis_rank}" + (" (withheld)" if withheld else "")
+    warning = f'<p class="fm-ai-link-warning">{WITHHELD_LINK_WARNING}</p>' if withheld else ""
     return (
         '<article class="fm-ai-card">'
-        f'<div class="fm-ai-card-tag">Priority {item.priority} · {source} · {link}</div>'
+        f'<div class="fm-ai-card-tag">Priority {item.priority} · {source} · {link}</div>{warning}'
         f"<p><strong>{escape(item.investigation)}</strong></p>"
         f"<p><strong>What to check:</strong> {escape(item.what_to_check)}</p>"
         f"<p><strong>If supported:</strong> {escape(item.if_supported)}</p>"

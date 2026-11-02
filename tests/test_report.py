@@ -205,6 +205,19 @@ def test_partial_ai_report_leaves_out_rejected_text():
         assert text not in html
 
 
+@pytest.mark.parametrize("reply", [None, full_reply(), partial_reply()], ids=["none", "full", "partial"])
+def test_every_report_says_it_is_decision_support(reply):
+    assert view.DECISION_SUPPORT_NOTICE in report.build_report(report_input(ai_text=reply))
+
+
+def test_withheld_links_never_read_as_verified():
+    html = report.build_report(report_input(ai_text=partial_reply()))
+
+    assert "Tests hypothesis 1</div>" not in html
+    assert "Tests hypothesis 2</div>" not in html
+    assert "Passed the automated evidence checks" not in html
+
+
 def test_ai_information_needs_are_labelled_as_ai_suggested():
     html = report.build_report(report_input(ai_text=partial_reply()))
 

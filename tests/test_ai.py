@@ -1136,22 +1136,38 @@ def test_empty_gemini_reply_is_rejected():
 
 @pytest.fixture
 def clean_environment(monkeypatch):
-    for name in ("GEMINI_API_KEY", "GEMINI_MODEL", "GEMINI_TIER", "FM_SHARED_DEPLOYMENT"):
+    for name in ("GEMINI_API_KEY", "GEMINI_MODEL", "GEMINI_TIER", "FM_SHARED_DEPLOYMENT", "FM_AI_ENABLED"):
         monkeypatch.delenv(name, raising=False)
     return monkeypatch
 
 
-def test_default_settings_need_a_key(clean_environment):
+ENABLED = {"FM_AI_ENABLED": "true"}
+
+
+def test_ai_is_off_by_default(clean_environment):
     settings = service.load_settings()
 
     assert settings.api_key is None
     assert settings.model == "gemini-3.1-flash-lite"
     assert settings.tier == "free"
-    assert settings.unavailable_reason == service.NO_KEY_MESSAGE
+    assert settings.unavailable_reason == service.AI_OFF_MESSAGE
+
+
+@pytest.mark.parametrize("value", [None, "false", "no", "1", ""])
+def test_a_key_alone_never_enables_ai(clean_environment, value):
+    secrets = {"GEMINI_API_KEY": "abc", "GEMINI_TIER": "paid", "FM_SHARED_DEPLOYMENT": "true"}
+    if value is not None:
+        secrets["FM_AI_ENABLED"] = value
+
+    assert service.load_settings(secrets).unavailable_reason == service.AI_OFF_MESSAGE
+
+
+def test_enabled_ai_still_needs_a_key(clean_environment):
+    assert service.load_settings(ENABLED).unavailable_reason == service.NO_KEY_MESSAGE
 
 
 def test_key_can_come_from_secrets(clean_environment):
-    assert service.load_settings({"GEMINI_API_KEY": "abc"}).unavailable_reason is None
+    assert service.load_settings({**ENABLED, "GEMINI_API_KEY": "abc"}).unavailable_reason is None
 
 
 def test_key_can_come_from_the_environment(clean_environment):
@@ -1165,14 +1181,16 @@ def test_model_can_be_replaced(clean_environment):
 
 
 def test_shared_deployment_on_the_free_tier_is_blocked(clean_environment):
-    settings = service.load_settings({"GEMINI_API_KEY": "abc", "FM_SHARED_DEPLOYMENT": "true"})
+    settings = service.load_settings(
+        {**ENABLED, "GEMINI_API_KEY": "abc", "FM_SHARED_DEPLOYMENT": "true"}
+    )
 
     assert settings.unavailable_reason == service.SHARED_FREE_TIER_MESSAGE
 
 
 def test_shared_deployment_on_the_paid_tier_is_allowed(clean_environment):
     settings = service.load_settings(
-        {"GEMINI_API_KEY": "abc", "FM_SHARED_DEPLOYMENT": "true", "GEMINI_TIER": "paid"}
+        {**ENABLED, "GEMINI_API_KEY": "abc", "FM_SHARED_DEPLOYMENT": "true", "GEMINI_TIER": "paid"}
     )
 
     assert settings.unavailable_reason is None

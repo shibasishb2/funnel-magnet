@@ -64,6 +64,7 @@ section.recommendation { border-left-color: var(--recommendation); }
 .tag-hypothesis { background: var(--hypothesis); }
 .tag-recommendation { background: var(--recommendation); }
 
+.notice { background: var(--soft); border-radius: 6px; padding: 8px 14px; }
 .legend { color: var(--muted); font-size: 0.85rem; line-height: 1.9; }
 .note { color: var(--muted); font-size: 0.85rem; }
 
