@@ -1,6 +1,7 @@
 """Run the real Streamlit app in a simulated session."""
 
 import json
+from html import escape
 
 import pytest
 from streamlit.testing.v1 import AppTest
@@ -11,7 +12,7 @@ from funnel_magnet.ai.providers import AIRequestError, ProviderResponse
 from funnel_magnet.diagnose import run_diagnosis
 from funnel_magnet.periods import WEEKLY
 from funnel_magnet.sources.meta import load_meta_csv
-from funnel_magnet.ui import view
+from funnel_magnet.ui import report, view
 
 SAMPLE_NAMES = [sample.name for sample in view.load_samples()]
 CAUSAL_WORDS = ("fatigue", "because of", "caused by", "due to", "saturation", "auction pressure")
@@ -248,6 +249,81 @@ def test_partly_valid_reply_flags_what_was_withheld(monkeypatch):
     assert "Partly verified" in text and "M99" in text
     assert "Delivery costs may have risen." not in text
     assert "AI-generated recommendations" in text
+
+
+def capture_reports(monkeypatch):
+    """Keep every report the app builds, because a download button hides its data."""
+    built, real = [], report.build_report
+
+    def build(item):
+        built.append(real(item))
+        return built[-1]
+
+    monkeypatch.setattr(report, "build_report", build)
+    return built
+
+
+def download_button(app):
+    return next(item for item in app.get("download_button") if item.label == "Download Diagnostic Report")
+
+
+@pytest.mark.parametrize("name", SAMPLE_NAMES)
+def test_every_scenario_offers_a_factual_report_without_a_key(monkeypatch, name):
+    built = capture_reports(monkeypatch)
+    app = choose_sample(start(), name)
+
+    assert not app.exception
+    assert download_button(app)
+    assert "contains no AI interpretation" in built[-1]
+
+
+def test_report_includes_the_ai_result_after_the_click(monkeypatch):
+    built = capture_reports(monkeypatch)
+    app = start_with_key(monkeypatch, CountingProvider(good_reply()))
+    assert "contains no AI interpretation" in built[-1]
+
+    generate_button(app).click()
+    app.run()
+
+    assert not app.exception
+    assert "Delivery costs may have risen." in built[-1]
+    assert "Fake fake-model" in built[-1]
+
+
+def test_report_shows_the_selected_campaign_and_period(monkeypatch):
+    built = capture_reports(monkeypatch)
+    app = start()
+    campaign = widget(app.selectbox, "Campaign").options[1]
+    widget(app.selectbox, "Campaign").select(campaign)
+    app.run()
+
+    assert escape(campaign) in built[-1]
+    assert "Current period" in built[-1]
+    assert not app.exception
+
+
+def test_failed_ai_request_still_gives_a_factual_report(monkeypatch):
+    built = capture_reports(monkeypatch)
+    app = start_with_key(monkeypatch, CountingProvider(error=AIRequestError("The AI service could not be reached.")))
+
+    generate_button(app).click()
+    app.run()
+
+    assert download_button(app)
+    assert "contains no AI interpretation" in built[-1]
+
+
+def test_report_never_contains_the_key(monkeypatch):
+    built = capture_reports(monkeypatch)
+    monkeypatch.setattr(service, "create_provider", lambda settings: CountingProvider(good_reply()))
+    app = AppTest.from_file("../app.py", default_timeout=30)
+    app.secrets["GEMINI_API_KEY"] = "secret-sentinel-value"
+    app.run()
+    generate_button(app).click()
+    app.run()
+
+    assert "Delivery costs may have risen." in built[-1]
+    assert not any("secret-sentinel-value" in item for item in built)
 
 
 def test_session_limit_stops_further_calls(monkeypatch):

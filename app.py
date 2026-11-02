@@ -1,6 +1,7 @@
 """Streamlit entry point for the Funnel Magnet diagnostic prototype."""
 
 import io
+from datetime import date
 
 import pandas as pd
 import streamlit as st
@@ -13,7 +14,7 @@ from funnel_magnet.ai.providers import AIError
 from funnel_magnet.diagnose import DEFAULT_MATERIALITY_THRESHOLD, run_diagnosis
 from funnel_magnet.periods import MONTHLY, WEEKLY, list_complete_periods
 from funnel_magnet.sources.meta import load_meta_csv
-from funnel_magnet.ui import charts, render, view
+from funnel_magnet.ui import charts, render, report, view
 
 SAMPLE_SOURCE = "Sample scenario"
 UPLOAD_SOURCE = "Upload CSV"
@@ -202,10 +203,24 @@ def show_ai_diagnosis(evidence, assessable):
 
     with st.expander("Evidence available to the AI"):
         st.json(evidence.payload(), expanded=False)
+    return result
 
 
-def show_dashboard(result, diagnosis, source_name, scope, single_campaign):
+def show_report_button(report_input):
+    st.download_button(
+        "Download Diagnostic Report",
+        data=report.build_report(report_input),
+        file_name=report.file_name(report_input.diagnosis),
+        mime="text/html",
+        on_click="ignore",
+        key="download-report",
+    )
+
+
+def show_dashboard(result, diagnosis, source_name, settings):
     currency = result.currency
+    scope = settings["campaign"] or ALL_CAMPAIGNS
+    single_campaign = settings["campaign"] is not None
     prior_label, current_label = diagnosis.prior_label, diagnosis.current_label
     evidence = build_evidence(
         diagnosis,
@@ -215,6 +230,8 @@ def show_dashboard(result, diagnosis, source_name, scope, single_campaign):
     )
 
     st.caption(f"{source_name} · {scope} · {current_label} compared with {prior_label}")
+    # The report must include any AI result from this run, so the button is filled in last.
+    report_slot = st.container()
     if not diagnosis.assessable:
         st.warning(
             "ROAS can't be compared for these periods because at least one has no spend. "
@@ -238,8 +255,26 @@ def show_dashboard(result, diagnosis, source_name, scope, single_campaign):
     st.html(render.findings_html(view.build_findings(diagnosis, currency)))
 
     show_contributions(diagnosis)
-    show_ai_diagnosis(evidence, diagnosis.assessable)
+    ai_result = show_ai_diagnosis(evidence, diagnosis.assessable)
     show_data_quality(result.warnings, diagnosis)
+
+    dates = result.data["date"]
+    with report_slot:
+        show_report_button(
+            report.ReportInput(
+                diagnosis=diagnosis,
+                evidence=evidence,
+                source_name=source_name,
+                scope=scope,
+                prior_period=period_text(settings["prior_period"]),
+                current_period=period_text(settings["current_period"]),
+                data_range=f"{dates.min():%d %b %Y} to {dates.max():%d %b %Y}",
+                analysis_date=date.today(),
+                currency=currency,
+                load_warnings=tuple(issue.message for issue in result.warnings),
+                ai_result=ai_result,
+            )
+        )
 
 
 def main():
@@ -273,9 +308,7 @@ def main():
                 except ValueError as error:
                     st.error(str(error))
                 else:
-                    scope = settings["campaign"] or ALL_CAMPAIGNS
-                    single_campaign = settings["campaign"] is not None
-                    show_dashboard(result, diagnosis, source_name, scope, single_campaign)
+                    show_dashboard(result, diagnosis, source_name, settings)
 
     st.caption(f"ESCP MBA prototype, version {__version__}. Use synthetic or anonymized data only.")
 

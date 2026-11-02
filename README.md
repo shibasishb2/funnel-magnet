@@ -2,7 +2,7 @@
 
 AI Marketing Performance Diagnostic Agent: an ESCP MBA prototype that diagnoses changes in Meta Ads performance.
 
-**Status:** Stage 3 is complete. Python writes the mathematical diagnosis, and Gemini only interprets it. No live Gemini response has passed every check, so the app shows the sections that pass and flags the rest. This latest version was tested with mocked responses and stored live responses, not a new live call. Report export and deployment are not built yet.
+**Status:** Stage 3 is complete. Python writes the mathematical diagnosis, and Gemini only interprets it. No live Gemini response has passed every check, so the app shows the sections that pass and flags the rest. This latest version was tested with mocked responses and stored live responses, not a new live call. Stage 4 adds a downloadable HTML report. Deployment is not built yet.
 
 Use synthetic or anonymized data only.
 
@@ -89,6 +89,17 @@ To use another provider, add a class with `generate()` to `funnel_magnet/ai/prov
 - The check for two causes in one hypothesis looks for the word "or", so causes joined by "and" can pass, and one cause worded with "or" is withheld. Whether actions are concrete is requested in the prompt, not enforced.
 - Rejected responses aren't retried automatically, because each attempt uses quota.
 - AI output is a suggestion for a person to review. The app never changes an ad account.
+
+## Diagnostic report
+
+**Download Diagnostic Report** on the dashboard saves one HTML file for the current comparison. It opens in any modern browser with no server, and it has no scripts, outside stylesheets or outside requests. Use the browser's print command to print it.
+
+`funnel_magnet/ui/report.py` builds the report from engine results and the AI result, and it calculates no metrics. All text from uploads and the model is escaped. Keys and settings are never passed to it.
+
+- **No AI result:** the report is complete and factual, and says it contains no AI interpretation.
+- **Partly verified AI result:** a notice at the top discloses that content was withheld, only accepted sections appear, and a recommendation whose hypothesis was withheld is labelled.
+
+The report has no charts, so contributions appear as a table. The analysis date is the server's date.
 
 ## Diagnostic engine
 
