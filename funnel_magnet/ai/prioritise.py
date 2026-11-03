@@ -76,6 +76,37 @@ ONE_SIDED_CONFIRM = re.compile(
     re.IGNORECASE,
 )
 CONFIRM_HEDGE = re.compile(r"\b(?:help\w*|can|could|may|might|whether)\s+(?:\w+\s+)?$", re.IGNORECASE)
+# A comparison can show a pattern. It can't isolate or pin down a cause, such as
+# "comparing last year isolates seasonal effects".
+# "Isolated to one campaign" only means concentrated there, so it stays allowed.
+ISOLATES = re.compile(
+    r"\b(?:isolat(?:e|es|ing)|isolated(?!\s+to\b)|pinpoint\w*|pins?\s+down|pinning\s+down)\b", re.IGNORECASE
+)
+# The upload holds daily totals per campaign, so the app can compare campaigns and
+# periods but not ad sets, ads, placements or audiences.
+FINE_GRAIN = (r"(?:ad[\s-]?sets?|ad[\s-]level|individual ads|each ad|creatives?|placements?|audiences?|"
+              r"segments?|age|gender|regions?|demographic\w*)")
+IN_APP = (r"(?:in (?:the|your) upload|in-upload|already (?:in|available|included|contains?)|"
+          r"(?:the|your) upload (?:contains|includes|has|shows)|available in (?:the|this) app|"
+          r"this app (?:shows|can show|analyses|breaks))")
+UNSUPPORTED_SCOPE = re.compile(rf"\b{FINE_GRAIN}\b[^.;]*\b{IN_APP}|\b{IN_APP}[^.;]*\b{FINE_GRAIN}\b", re.IGNORECASE)
+# Why a cause is worth checking is fine. How likely it is isn't, because the data shows
+# what changed, not why. "Main driver" stays allowed: it is a mathematical result.
+LIKELIHOOD = re.compile(
+    r"\b(?:is|are|was|were|seems?|appears?|remains?|becomes?|making (?:it|this|them)|this is)\s+"
+    r"(?:also\s+)?(?:the\s+|a\s+)?(?:most\s+|more\s+|very\s+|highly\s+|quite\s+)?(?:likely|probable)\b"
+    r"|\b(?:likely|probable|strong(?:est)?)\s+(?:possible\s+)?(?:factor|cause|explanation|candidate|culprit|suspect)s?\b"
+    r"|\bprobably\b",
+    re.IGNORECASE,
+)
+# Words that carry no meaning of their own when deciding whether a note repeats the playbook.
+STOPWORDS = frozenset(
+    "the and for with that this from into over each both their there these those which while when "
+    "whether would could might shows show helps help data check checks cause causes possible change "
+    "changes period periods also more less than then they them your about rise rose fall fell".split()
+)
+# A note that is mostly the playbook's own words adds nothing, so it is left out.
+REPEATS_PLAYBOOK = 0.75
 # A hedge must sit right before an invented metric movement to make it a possibility.
 HEDGE_WINDOW_CHARS = 25
 
@@ -108,7 +139,13 @@ Rules:
 8. Write plainly for a marketing manager, without technical terms or code-style
    names. Keep each explanation to one or two sentences.
 9. A check can support or weaken a possible cause. Never say a check confirms or
-   proves a cause.
+   proves a cause, or that it isolates or pins one down.
+10. The upload holds daily totals for each campaign. Never say the upload or this app
+   covers ad sets, individual ads, placements or audiences: those checks need data
+   from outside the app.
+11. Say why a cause or check is worth looking at, for example which problem it could
+   explain. Never rate how likely a cause is: the data shows what changed, not why.
+12. Add something the playbook text doesn't already say, or leave the explanation short.
 """
 
 # A claim that these problems share a cause. "A common reason for drop-off" is a general
@@ -305,6 +342,15 @@ def _text_issues(field, text, allowed, signs):
             not CONFIRM_HEDGE.search(sentence[: m.start()]) for m in ONE_SIDED_CONFIRM.finditer(sentence)
         ):
             issues.append(f"{field} says a check would prove a cause, rather than support or weaken it.")
+        if ISOLATES.search(sentence):
+            issues.append(f"{field} says a comparison could isolate or pin down a cause.")
+        scope = UNSUPPORTED_SCOPE.search(sentence)
+        # "Not yet in the upload" says the opposite, so a negation inside the claim clears it.
+        if scope and not NEGATION.search(scope.group(0)):
+            issues.append(f"{field} implies the upload covers ad sets, ads, placements or audiences, which it doesn't.")
+        likely = LIKELIHOOD.search(sentence)
+        if likely and not re.search(r"\bif\b", sentence[: likely.start()], re.IGNORECASE):
+            issues.append(f"{field} rates how likely a cause is, which the data can't show.")
         issues += _direction_issues(field, sentence, signs)
         for claim in METRIC_CHANGE.finditer(sentence):
             near = sentence[max(0, claim.start() - HEDGE_WINDOW_CHARS):claim.end()]
@@ -321,11 +367,22 @@ def _readable(text, names):
     return text
 
 
+def _words(text):
+    return {word.rstrip("s") for word in re.findall(r"[a-z]+", text.lower()) if len(word) > 3 and word not in STOPWORDS}
+
+
+def repeats(note, reference):
+    """True when nearly every meaningful word of an AI note is already in the playbook text."""
+    words = _words(note)
+    return not words or len(words & _words(reference)) / len(words) >= REPEATS_PLAYBOOK
+
+
 class _Review:
     """Collects what was withheld, with the text that failed, for the log."""
 
     def __init__(self):
         self.issues = []
+        self.repeated = 0
 
     def check(self, field, text, allowed, signs):
         problems = _text_issues(field, text, allowed, signs)
@@ -338,7 +395,7 @@ class _Review:
             review_log.info("Withheld AI text. Reason: %s Text: %s", problem, text)
 
 
-def _ranked(entries, key, known, label, allowed, signs, names, review):
+def _ranked(entries, key, known, label, allowed, signs, names, review, references):
     order, notes = [], {}
     for entry in entries:
         item_id = entry.get(key) if isinstance(entry, dict) else None
@@ -350,6 +407,9 @@ def _ranked(entries, key, known, label, allowed, signs, names, review):
             continue
         problems = review.check(f"The {label} explanation for {known[item_id]}", rationale, allowed, signs)
         order.append(item_id)
+        if rationale and not problems and repeats(rationale, references[item_id]):
+            review.repeated += 1
+            problems = ["repeats the playbook"]
         notes[item_id] = "" if problems else rationale
     return order, notes
 
@@ -370,8 +430,12 @@ def merge(marketing, reply, evidence, provider, model, input_tokens=None, output
         **causes,
     }
 
-    cause_order, cause_notes = _ranked(reply.get("cause_priorities") or [], "cause_id", causes, "cause", allowed, signs, names, review)
-    check_order, check_notes = _ranked(reply.get("check_priorities") or [], "check_id", checks, "check", allowed, signs, names, review)
+    cause_text = {c.id: f"{c.title} {c.statement}" for c in marketing.causes}
+    check_text = {
+        i.id: " ".join([i.title, i.detail, i.reason, i.look_at, *i.readings, i.if_unclear]) for i in marketing.investigations
+    }
+    cause_order, cause_notes = _ranked(reply.get("cause_priorities") or [], "cause_id", causes, "cause", allowed, signs, names, review, cause_text)
+    check_order, check_notes = _ranked(reply.get("check_priorities") or [], "check_id", checks, "check", allowed, signs, names, review, check_text)
 
     relationship = _readable(str(reply.get("relationship") or "").strip(), names)
     if relationship and len(marketing.problems) < 2:
@@ -391,6 +455,10 @@ def merge(marketing, reply, evidence, provider, model, input_tokens=None, output
             unconditional = [f"{field} isn't conditional on what the checks show."]
             review.add(unconditional, text)
             problems += unconditional
+        action = next((a for a in marketing.actions if a.cause == causes[cause_id]), None)
+        if not problems and action and repeats(text, f"{action.if_supported} {action.if_not_supported}"):
+            review.repeated += 1
+            continue
         if not problems:
             guidance[causes[cause_id]] = text
 
@@ -416,7 +484,9 @@ def merge(marketing, reply, evidence, provider, model, input_tokens=None, output
         causes=new_causes,
         investigations=new_checks,
         actions=new_actions,
-        ai=playbook.AIPriorities(provider, model, relationship, tuple(dict.fromkeys(review.issues)), input_tokens, output_tokens),
+        ai=playbook.AIPriorities(
+            provider, model, relationship, tuple(dict.fromkeys(review.issues)), input_tokens, output_tokens, review.repeated
+        ),
     )
 
 

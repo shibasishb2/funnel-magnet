@@ -494,7 +494,7 @@ if_unclear = "Benchmarks are broad averages. If none match your market, compare 
 id = "last_year"
 title = "Same period last year"
 source = "external"
-detail = "CPM for the same weeks last year, to separate seasonality from account changes."
+detail = "CPM for the same weeks last year, to see whether a similar rise happened then."
 look_at = "CPM and results for the same weeks last year, compared with the weeks around them."
 readings = [
     "If CPM rose at the same time last year, seasonality may explain part of the increase, although that does not prove it.",

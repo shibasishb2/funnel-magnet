@@ -365,10 +365,16 @@ def test_every_top_check_explains_its_priority():
         assert all(item.reason for item in result.top_investigations)
 
 
-def test_reasons_mention_the_problems_share_of_the_roas_effect():
-    top = build(diagnose_totals(SEPTEMBER, OCTOBER)).top_investigations
+def test_reasons_say_which_problems_a_check_addresses():
+    checks = build(diagnose_totals(SEPTEMBER, OCTOBER)).investigations
+    top = checks[:3]
 
-    assert "of the problems' ROAS effect" in top[0].reason
+    assert top[0].reason.startswith("Addresses both problems found: CPM and Checkout → Purchase.")
+    assert "ROAS effect" not in " ".join(c.reason for c in checks)
+    one = next(c for c in checks if c.id == "payment_logs")
+    assert "Addresses Checkout → Purchase, 1 of the 2 problems found." in one.reason
+    cpm = next(c for c in checks if c.id == "auction_benchmarks")
+    assert "Addresses CPM, 1 of the 2 problems found, including the one with the largest effect on ROAS." in cpm.reason
     assert "Uses data already in your upload" in top[0].reason
 
 

@@ -135,20 +135,16 @@ def _ai_status(marketing):
     if marketing is None or marketing.ai is None:
         return "Not included"
     ai = marketing.ai
-    partly = ", some content withheld" if ai.withheld else ""
+    partly = ", some explanations left out" if ai.withheld else ""
     return f"Prioritised by {ai.provider} {ai.model}{partly}"
-    model = f"{result.provider} {result.model}"
-    if result.withheld:
-        return f"Partly verified, some content withheld ({model})"
-    return f"Passed the automated evidence checks ({model})"
 
 
 def _ai_alert(marketing):
     if marketing is None or marketing.ai is None or not marketing.ai.withheld:
         return ""
     return (
-        '<div class="alert" role="alert"><strong>Some AI content was withheld.</strong> Parts of the AI '
-        "prioritisation failed the checks and are left out. Section 5 lists why.</div>"
+        '<div class="alert" role="alert"><strong>Some AI explanations were left out.</strong> They didn\'t '
+        "pass the accuracy checks, so the playbook text is shown instead. Section 5 gives the technical reasons.</div>"
     )
 
 
@@ -211,6 +207,7 @@ def _findings_section(item):
         + f"<ul>{_items(findings.observations)}</ul>"
         + f"<h3>Mathematical drivers</h3><ul>{_items(findings.drivers)}</ul>"
         + (f"{_contribution_table(diagnosis)}" if diagnosis.drivers else "")
+        + (f'<p class="note">{escape(executive.SHARE_NOTE)}</p>' if diagnosis.drivers else "")
         + f'<p class="note">{escape(diagnosis.driver_statement)}</p>'
         + "<h3>Conversion funnel</h3>"
         + (
@@ -261,6 +258,12 @@ def _executive_section(item):
         for c in summary.checks
     )
     steps = "".join(f"<li><strong>{escape(s.cause)}.</strong> {escape(s.text)}</li>" for s in summary.next_steps)
+    stage_checks = "".join(
+        f"<h3>Direct checks for {escape(label)}, after tracking</h3><ul>"
+        + "".join(f"<li><strong>{escape(c.title)}</strong> ({escape(c.where)}): {escape(c.look_at)}</li>" for c in checks)
+        + "</ul>"
+        for label, checks in summary.stage_checks
+    )
     source_class = "source source-synthetic" if summary.synthetic else "source"
     source = f'<p class="{source_class}">{escape(summary.source)}</p>' if summary.source else ""
     notes = "".join(f"<li>{escape(note)}</li>" for note in summary.data_notes)
@@ -271,7 +274,9 @@ def _executive_section(item):
         f"{_ai_note('AI, how the problems may relate', summary.ai_relationship)}"
         "<h3>KPIs that need attention</h3>"
         + (f"<ul>{problems}</ul>" if problems else "<p>No final KPI worsened by the threshold or more.</p>")
+        + (f'<p class="note">{escape(summary.share_note)}</p>' if summary.share_note else "")
         + (f"<h3>Top three investigations</h3>{checks}" if checks else "")
+        + stage_checks
         + (
             f"<h3>Next steps, only if the evidence supports them</h3><ul>{steps}</ul>"
             '<p class="note">The full action plan for every cause is in section 4.</p>'
@@ -371,8 +376,9 @@ def _ai_priorities_section(ai):
         if ai.relationship
         else ""
     )
-    withheld = (
-        f"<h3>Withheld because they failed the checks</h3><ul>{_items(ai.withheld)}</ul>" if ai.withheld else ""
+    summary = executive.ai_summary(ai)
+    withheld = (f'<p>{escape(summary)}</p>' if summary else "") + (
+        f'<h3>Technical details</h3><ul class="note">{_items(ai.withheld)}</ul>' if ai.withheld else ""
     )
     return (
         '<section class="driver"><h2>5. AI prioritisation</h2>'

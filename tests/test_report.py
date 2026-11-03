@@ -231,7 +231,8 @@ def test_report_shows_ai_priorities_with_their_labels():
 def test_withheld_ai_content_is_disclosed_at_the_top():
     html = report.build_report(report_input(ai_text=ai_reply("Auction competition caused the rise in CPM.")))
 
-    assert html.index("Some AI content was withheld") < html.index("1. A. Confirmed findings")
+    assert html.index("Some AI explanations were left out.") < html.index("1. A. Confirmed findings")
+    assert "1 AI explanation didn&#x27;t pass the accuracy checks" in html and "<h3>Technical details</h3>" in html
     assert "Auction competition caused the rise" not in html
 
 

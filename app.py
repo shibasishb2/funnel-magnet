@@ -140,7 +140,8 @@ def show_contributions(diagnosis):
     )
     st.caption(
         "Green bars add to ROAS and red bars subtract from it. Each label shows ROAS points, "
-        "and the bars sum exactly to the ROAS change."
+        "and the bars sum exactly to the ROAS change. In the table, share of movement is each KPI's "
+        "part of all ROAS movement in both directions added together, not a share of the net change."
     )
     # Shown directly, because this sits inside the Detailed analysis expander.
     st.caption("Contribution table")
@@ -186,7 +187,8 @@ def request_ai_priorities(marketing, evidence, settings, key):
             result = prioritise.prioritise(marketing, evidence, service.create_provider(settings))
     except AIError as error:
         messages = [("error", f"{error} The diagnosis below is complete without AI.")]
-        return messages + [("caption", f"Withheld: {issue}") for issue in getattr(error, "issues", [])]
+        issues = getattr(error, "issues", [])
+        return messages + ([("details", issues)] if issues else [])
     st.session_state.setdefault("ai_results", {})[key] = result
     return []
 
@@ -208,7 +210,13 @@ def show_ai_priorities(marketing, evidence, assessable):
     feedback = st.session_state.pop("ai_feedback", None)
     if feedback and feedback[0] == key:
         for kind, text in feedback[1]:
-            getattr(st, kind)(text)
+            if kind == "details":
+                # The reasons are for whoever maintains the checks, so they stay folded away.
+                with st.expander("Technical details"):
+                    for issue in text:
+                        st.caption(issue)
+            else:
+                getattr(st, kind)(text)
 
     left = service.MAX_RUNS_PER_SESSION - st.session_state.get("ai_runs", 0)
     if key in st.session_state.get("ai_results", {}):

@@ -122,10 +122,13 @@ def _ai_note(label, text):
 
 
 def ai_status_html(ai):
+    from funnel_magnet.ui.executive import ai_summary
+
+    summary = ai_summary(ai)
     withheld = (
-        '<div class="fm-panel-note">Withheld because they failed the checks:</div>'
-        f'<ul class="fm-panel-note">{_items(ai.withheld)}</ul>'
-        if ai.withheld
+        f'<p class="fm-panel-note">{escape(summary)}</p>'
+        + (_more("Technical details", f'<ul class="fm-panel-note">{_items(ai.withheld)}</ul>') if ai.withheld else "")
+        if summary or ai.withheld
         else ""
     )
     relationship = (
@@ -274,6 +277,12 @@ def executive_html(summary):
         for c in summary.checks
     )
     steps = "".join(f"<li><strong>{escape(s.cause)}.</strong> {escape(s.text)}</li>" for s in summary.next_steps)
+    stage_checks = "".join(
+        f'<div class="fm-ai-heading">Direct checks for {escape(label)}, after tracking</div><ul>'
+        + "".join(f"<li><strong>{escape(c.title)}</strong> ({escape(c.where)}): {escape(c.look_at)}</li>" for c in checks)
+        + "</ul>"
+        for label, checks in summary.stage_checks
+    )
     source_class = "fm-source fm-source-synthetic" if summary.synthetic else "fm-source"
     source = f'<p class="{source_class}">{escape(summary.source)}</p>' if summary.source else ""
     notes = "".join(f"<li>{escape(note)}</li>" for note in summary.data_notes)
@@ -283,7 +292,9 @@ def executive_html(summary):
         f'{source}<p class="fm-headline">{escape(summary.headline)}</p>{narrative}'
         f"{_ai_note('AI, how the problems may relate', summary.ai_relationship)}"
         f'<div class="fm-ai-heading">KPIs that need attention</div>{problems}'
+        + (f'<p class="fm-panel-note">{escape(summary.share_note)}</p>' if summary.share_note else "")
         + (f'<div class="fm-ai-heading">Top three investigations</div>{checks}' if checks else "")
+        + stage_checks
         + (
             '<div class="fm-ai-heading">Next steps, only if the evidence supports them</div>'
             f'<ul>{steps}</ul><p class="fm-panel-note">The full action plan for every cause is in the detailed analysis.</p>'

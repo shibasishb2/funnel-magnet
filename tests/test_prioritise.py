@@ -572,3 +572,59 @@ def test_sep_oct_relationship_and_guidance_follow_the_same_rule():
     assert result.ai.relationship == ""
     guidance = {a.cause: a.ai_note for a in result.actions if a.ai_note}
     assert list(guidance.values()) == [kept_guidance]
+
+
+
+# Presentation pass: overclaims, unsupported scope, likelihood ratings and repetition.
+
+@pytest.mark.parametrize(
+    "text, reason",
+    [
+        ("Comparing the same weeks last year isolates seasonal effects.", "isolate or pin down"),
+        ("Results by audience help pinpoint saturation.", "isolate or pin down"),
+        ("The upload already contains ad set results to test this.", "ad sets, ads, placements or audiences"),
+        ("Placement data is available in this app, so check it first.", "ad sets, ads, placements or audiences"),
+        ("Auction competition is the most likely factor here.", "how likely"),
+        ("This makes it a strong candidate for the CPM rise.", "how likely"),
+        ("Seasonality is probably behind part of the rise.", "how likely"),
+    ],
+)
+def test_misleading_ai_claims_are_withheld(text, reason):
+    marketing, evidence = sep_oct()
+    result = prioritise.prioritise(marketing, evidence, FakeProvider(sep_oct_reply(
+        cause_priorities=[{"cause_id": "delivery_shift", "rationale": text}])))
+
+    assert result.causes[0].ai_note == ""
+    assert any(reason in issue for issue in result.ai.withheld)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "It shows whether the CPM rise is isolated to one campaign, which is worth knowing before changing budgets.",
+        "Frequency data is not yet in the upload, so it needs an export from Ads Manager.",
+        "CPM is the main driver of the decline in the calculation, so a delivery shift is worth checking first.",
+        "If spend moved to weaker campaigns, a mix shift would become more likely.",
+    ],
+)
+def test_sound_ai_explanations_are_still_kept(text):
+    marketing, evidence = sep_oct()
+    result = prioritise.prioritise(marketing, evidence, FakeProvider(sep_oct_reply(
+        cause_priorities=[{"cause_id": "delivery_shift", "rationale": text}])))
+
+    assert result.causes[0].ai_note == text
+
+
+def test_ai_notes_that_only_repeat_the_playbook_are_left_out_and_counted():
+    marketing, evidence = sep_oct()
+    payment = next(i for i in marketing.investigations if i.id == "payment_logs")
+    result = prioritise.prioritise(marketing, evidence, FakeProvider(sep_oct_reply(
+        check_priorities=[{"check_id": "payment_logs", "rationale": payment.detail}])))
+
+    assert next(i for i in result.investigations if i.id == "payment_logs").ai_note == ""
+    assert result.ai.repeated == 1 and result.ai.withheld == ()
+
+
+def test_the_prompt_sets_the_new_limits():
+    for rule in ("isolates or pins one down", "ad sets, individual ads, placements or audiences", "Never rate how likely"):
+        assert rule in prioritise.SYSTEM_PROMPT

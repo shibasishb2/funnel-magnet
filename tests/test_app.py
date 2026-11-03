@@ -245,7 +245,9 @@ def test_partly_valid_reply_flags_what_was_withheld(monkeypatch):
 
     text = page_text(app)
     assert not app.exception and not app.error
-    assert "Withheld because they failed the checks" in text
+    # A short summary on the page, with the technical reasons folded away.
+    assert "pass the accuracy checks and was left out" in text
+    assert "<summary>Technical details</summary>" in text and "states a cause as fact" in text
     assert "Auction competition caused the rise" not in text
     assert "It could quickly rule self-made changes in or out." in text
 

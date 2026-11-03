@@ -100,6 +100,8 @@ class AIPriorities:
     withheld: tuple[str, ...] = ()
     input_tokens: int | None = None
     output_tokens: int | None = None
+    # AI notes left out because they only repeated the playbook's own text.
+    repeated: int = 0
 
 
 @dataclass(frozen=True)
@@ -113,6 +115,9 @@ class MarketingDiagnosis:
     investigations: tuple[InvestigationItem, ...]
     actions: tuple[ActionItem, ...]
     ai: AIPriorities | None = field(default=None)
+    # For each worsened funnel stage, the checks that look directly at that step of the
+    # website, as (stage label, check ids). Shared and tracking checks aren't included.
+    stage_checks: tuple[tuple[str, tuple[str, ...]], ...] = ()
 
     @property
     def has_funnel_problem(self):
@@ -234,6 +239,17 @@ def _shares(diagnosis, problems):
     return {move.metric: effect.get(move.metric, 0) / total for move in problems}
 
 
+def _addresses(kpis, problems, includes_largest):
+    """Which of the problems found a check addresses, in words, such as "2 of the 3 problems"."""
+    names = kpis[0] if len(kpis) == 1 else f"{', '.join(kpis[:-1])} and {kpis[-1]}"
+    if problems == 1:
+        return f"Addresses {names}, the only problem found"
+    if len(kpis) == problems:
+        return f"Addresses {'both' if problems == 2 else f'all {problems}'} problems found: {names}"
+    text = f"Addresses {names}, {len(kpis)} of the {problems} problems found"
+    return text + (", including the one with the largest effect on ROAS" if includes_largest else "")
+
+
 def _rank(checks, shares, labels, has_funnel_problem):
     """Order checks by the five approved criteria, and say why the first three come first.
 
@@ -260,7 +276,7 @@ def _rank(checks, shares, labels, has_funnel_problem):
     if has_funnel_problem and measurement and measurement[0] not in ordered[:TOP_INVESTIGATIONS]:
         ordered.remove(measurement[0])
         ordered.insert(TOP_INVESTIGATIONS - 1, measurement[0])
-    whose = "problems'" if len(shares) > 1 else "problem's"
+    largest = max(shares, key=shares.get) if shares else None
     # Every check gets its reason, because an AI may move any of them into the top three.
     for check in ordered:
         parts = []
@@ -268,8 +284,7 @@ def _rank(checks, shares, labels, has_funnel_problem):
             parts.append("Rules out a counting fault before anything else")
         kpis = [labels[m] for m in check["kpis"]]
         if kpis:
-            share = sum(shares[m] for m in check["kpis"])
-            parts.append(f"Covers {', '.join(kpis)}, {share:.0%} of the {whose} ROAS effect")
+            parts.append(_addresses(kpis, len(shares), largest in check["kpis"] and len(kpis) < len(shares)))
         if check["shared"]:
             parts.append("Tests an explanation shared by more than one problem")
         if len(check["causes"]) > 1:
@@ -277,6 +292,27 @@ def _rank(checks, shares, labels, has_funnel_problem):
         parts.append("Uses data already in your upload" if check["available"] else "Needs data from outside this app")
         check["reason"] = ". ".join(parts) + "."
     return ordered
+
+
+def _stage_checks(playbook, problem_metrics, available):
+    """Checks for causes specific to each worsened funnel stage.
+
+    A cause counts when it explains only website funnel stages, but not all of them. That
+    leaves out tracking and traffic quality, which apply to every stage, and causes shared
+    with ad metrics such as CPM, which the top three already weigh.
+    """
+    stages = []
+    for stage in FUNNEL_STAGES:
+        if stage not in problem_metrics:
+            continue
+        ids = []
+        for cause in playbook.causes:
+            explains = set(cause["explains"])
+            if stage in explains and explains <= set(FUNNEL_STAGES) and explains != set(FUNNEL_STAGES):
+                ids += [check for check in cause["investigations"] if check in available and check not in ids]
+        if ids:
+            stages.append((view.metric_label(stage), tuple(ids)))
+    return tuple(stages)
 
 
 def build(diagnosis, currency=None, several_campaigns=False, earlier_periods=False, playbook=None):
@@ -383,4 +419,5 @@ def build(diagnosis, currency=None, several_campaigns=False, earlier_periods=Fal
         causes=causes,
         investigations=tuple(investigations),
         actions=tuple(ActionItem(c["title"], c["if_supported"], c["if_not_supported"]) for c, _ in matched),
+        stage_checks=_stage_checks(playbook, problem_metrics, {item.id for item in investigations}),
     )

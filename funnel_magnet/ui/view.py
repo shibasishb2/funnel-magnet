@@ -44,13 +44,14 @@ PLAIN_NAMES = {
     "aov": "average order value",
     "cpa": "cost per purchase",
     "cpc": "cost per click",
-    "cvr": "conversion rate",
+    "cvr": "purchases per link click",
     "cpm": "cost per 1,000 impressions",
-    "ctr": "click-through rate",
-    "link_clicks_to_landing_page_views": "share of clicks that reach the landing page",
-    "landing_page_views_to_add_to_carts": "share of visitors who add to cart",
-    "add_to_carts_to_checkouts_initiated": "share of carts that reach checkout",
-    "checkouts_initiated_to_purchases": "share of checkouts that end in a purchase",
+    "ctr": "link click-through rate",
+    # Funnel stages are ratios of Meta event counts, not shares of unique people.
+    "link_clicks_to_landing_page_views": "landing page views per link click",
+    "landing_page_views_to_add_to_carts": "add-to-cart events per landing page view",
+    "add_to_carts_to_checkouts_initiated": "checkouts started per add-to-cart event",
+    "checkouts_initiated_to_purchases": "purchases per checkout started",
 }
 WHY_IT_MATTERS = {
     "roas": (
@@ -70,7 +71,7 @@ WHY_IT_MATTERS = {
         "the site and each sale costs more."
     ),
     "cvr": (
-        "A smaller share of ad clicks turn into purchases, so more ad spend is needed for "
+        "Fewer purchases are recorded for each link click, so more ad spend is needed for "
         "every sale."
     ),
     "cpm": (
@@ -81,21 +82,25 @@ WHY_IT_MATTERS = {
         "Fewer people who see the ads click, so more paid impressions are needed for each "
         "visit, which raises the cost of every click and sale."
     ),
+    # A funnel ratio counts Meta events, so a fall may be real or a tracking issue.
     "link_clicks_to_landing_page_views": (
-        "More paid clicks never reach the landing page, so budget is spent on visits that "
-        "never happen."
+        "Fewer landing page views are recorded for each paid link click. This may mean "
+        "paid clicks that never reach the page, or a tracking issue, both of which should "
+        "be investigated."
     ),
     "landing_page_views_to_add_to_carts": (
-        "Fewer visitors add products to the cart, so more paid traffic is needed for each "
-        "sale."
+        "Fewer add-to-cart events are recorded for each landing page view. This may mean "
+        "fewer people choosing to buy from the page, or a tracking issue, both of which "
+        "should be investigated."
     ),
     "add_to_carts_to_checkouts_initiated": (
-        "Fewer shoppers move from the cart to checkout, so sales slip away after customers "
-        "have shown they want to buy."
+        "Fewer checkouts are started for each add-to-cart event. This may indicate potential "
+        "sales lost between cart and checkout, or a tracking issue, both of which should be "
+        "investigated."
     ),
     "checkouts_initiated_to_purchases": (
-        "Fewer shoppers who start checkout finish paying, so sales are lost at the last "
-        "step, after the advertising cost has already been paid."
+        "Fewer purchases are recorded for each checkout started. This may indicate lost "
+        "sales during checkout or a tracking issue, both of which should be investigated."
     ),
 }
 

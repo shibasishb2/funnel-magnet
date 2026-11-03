@@ -83,7 +83,7 @@ def test_rising_roas_with_hidden_problems_names_both_and_the_link_between_them()
     summary = executive.build(diagnosis, marketing)
 
     assert summary.headline.startswith("ROAS rose 14.7%, but cost per 1,000 impressions (CPM up 44.4%) and ")
-    assert "share of checkouts that end in a purchase (down 11.2%)" in summary.headline
+    assert "purchases per checkout started (down 11.2%)" in summary.headline
     assert all(p.hidden for p in summary.problems) and len(summary.problems) == 2
     # CPC and CPA improved, so the CPM sentence must not say CPM pushed them up.
     assert summary.narrative[0] == "Cost per 1,000 impressions (CPM) rose 44.4%, and took 1.24 off ROAS."
@@ -189,6 +189,8 @@ def test_page_and_report_show_the_same_executive_diagnosis(name):
     pieces += [part for p in summary.problems for part in (p.change, p.effect, p.why) if part]
     pieces += [part for c in summary.checks for part in (c.title, c.what, c.look_at, *c.readings, c.if_unclear, c.why_first) if part]
     pieces += [part for s in summary.next_steps for part in (s.text, s.cause)]
+    pieces += [part for _, checks in summary.stage_checks for c in checks for part in (c.title, c.look_at)]
+    pieces += [summary.share_note] if summary.share_note else []
     for piece in pieces:
         assert escape(piece) in page and escape(piece) in executive_part, piece
     assert page.count("Hidden by overall ROAS") == executive_part.count("Hidden by overall ROAS")
@@ -227,3 +229,70 @@ def test_synthetic_and_uploaded_results_are_labelled_on_the_page_and_in_the_repo
     assert escape(summary.source) in render.executive_html(summary) and escape(summary.source) in html
     other = "Your uploaded data" if synthetic else "Synthetic demonstration data"
     assert other not in render.executive_html(summary) and other not in html
+
+
+
+# Presentation pass: event-based names, offsetting, merged steps and direct checkout checks.
+
+def test_funnel_stages_are_described_as_event_ratios_not_people():
+    for metric in playbook.FUNNEL_STAGES:
+        name, why = view.PLAIN_NAMES[metric], view.WHY_IT_MATTERS[metric]
+        assert " per " in name and not re.search(r"visitor|shopper|share of", name + why)
+    assert view.PLAIN_NAMES["cvr"] == "purchases per link click"
+
+
+def test_offsetting_movements_are_explained_in_plain_english():
+    for name, net in (("Masked problem", "+0.14"), ("Sep-Oct", "+0.46")):
+        summary = executive.build(*scenario(name)[:2])
+        sentence = next(s for s in summary.narrative if "largely cancel out" in s)
+        assert sentence.endswith(f"so the net change was only {net}.")
+        assert "not a share of the net ROAS change" in summary.share_note
+    assert not any("cancel out" in s for s in executive.build(*scenario("CPM inflation")[:2]).narrative)
+
+
+def test_september_october_considers_checkout_checks_after_tracking():
+    summary = executive.build(*scenario("Sep-Oct")[:2])
+
+    assert "Tracking diagnostics" in [c.title for c in summary.checks]
+    # The shared-cause checks keep their places in the top three.
+    assert [c.title for c in summary.checks][:2] == ["Compare each campaign separately", "Results by audience"]
+    label, checks = summary.stage_checks[0]
+    assert label == "Checkout → Purchase"
+    assert [c.title for c in checks] == ["Website change log", "Payment logs", "Shipping costs shown", "Checkout step completion"]
+
+
+def test_stage_checks_leave_out_what_the_top_three_already_cover():
+    summary = executive.build(*scenario("Checkout friction")[:2])
+    titles = [c.title for _, checks in summary.stage_checks for c in checks]
+
+    assert "Website change log" in [c.title for c in summary.checks] and "Website change log" not in titles
+    assert titles == ["Payment logs", "Shipping costs shown", "Checkout step completion"]
+
+
+def test_near_identical_next_steps_are_merged_but_kept_in_detail():
+    diagnosis, marketing, currency, _ = scenario("Checkout friction")
+    reply = {
+        "cause_priorities": [{"cause_id": "payment_errors", "rationale": ""}, {"cause_id": "payment_options", "rationale": ""}],
+        "check_priorities": [{"check_id": "payment_logs", "rationale": ""}],
+        "relationship": "",
+        "action_guidance": [],
+    }
+    prioritised = prioritise.merge(marketing, reply, build_evidence(diagnosis, currency), "Groq", "openai/gpt-oss-120b")
+    steps = executive.build(diagnosis, prioritised).next_steps
+
+    payment = next(s for s in steps if s.cause == "Payment errors")
+    assert payment.related == ("Payment options",)
+    assert "Payment options" not in [s.cause for s in steps]
+    assert "also bear on Payment options" in payment.text
+    # The detailed analysis still lists both causes and both actions.
+    assert {"Payment errors", "Payment options"} <= {a.cause for a in prioritised.actions}
+
+
+def test_funnel_explanations_keep_tracking_open_as_a_possibility():
+    for metric in playbook.FUNNEL_STAGES:
+        why = view.WHY_IT_MATTERS[metric]
+        assert "may" in why and "tracking issue" in why and "should be investigated" in why
+    assert view.WHY_IT_MATTERS["checkouts_initiated_to_purchases"] == (
+        "Fewer purchases are recorded for each checkout started. This may indicate lost sales "
+        "during checkout or a tracking issue, both of which should be investigated."
+    )
