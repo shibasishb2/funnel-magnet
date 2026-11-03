@@ -368,6 +368,13 @@ title = "Compare each campaign separately"
 source = "campaigns"
 detail = "Choose each campaign in the sidebar's Campaign menu to see whether the change is concentrated in one campaign."
 unavailable_detail = "Export the report broken down by campaign to see whether the change is concentrated in one campaign."
+look_at = "How {kpis} changed in each campaign, and how spend was split between campaigns in both periods."
+readings = [
+    "If {kpis} worsened mainly in one campaign, look for changes specific to that campaign, such as its budget, bidding, audience or creative.",
+    "If {kpis} worsened across most campaigns, an account-wide or external cause, such as auction conditions or seasonality, becomes more likely.",
+    "If spend moved toward campaigns that already had weaker {kpis}, a campaign mix shift may explain part of the change.",
+]
+if_unclear = "Comparing campaigns does not prove a structural change on its own. If no clear pattern appears, compare earlier periods and review the account change history."
 
 [[investigation]]
 id = "earlier_periods"
@@ -375,153 +382,319 @@ title = "Compare earlier periods"
 source = "periods"
 detail = "Choose earlier periods in the sidebar to see whether the change is recent, a trend or a recurring pattern."
 unavailable_detail = "Export a longer date range to see whether the change is recent, a trend or a recurring pattern."
+look_at = "{kpis} across several earlier weeks or months, not just the two periods compared here."
+readings = [
+    "A sudden change in the latest period points to something that changed recently, such as an account edit or a shift in the auction, so check the account change history next.",
+    "A gradual drift over several periods fits slow-building issues better, such as audience saturation or creative fatigue, so look at frequency and reach.",
+    "A similar change at the same point in earlier cycles may suggest seasonality, but it does not prove it.",
+]
+if_unclear = "If the history is too short or too noisy to show a pattern, export a longer date range or compare the same weeks last year."
 
 [[investigation]]
 id = "frequency_reach"
 title = "Frequency and reach over time"
 source = "external"
 detail = "Frequency and reach by ad set for both periods, from Meta Ads Manager. Your export may already include Reach and Frequency columns, but this app doesn't analyse them yet."
+look_at = "Average frequency and reach for each ad set in both periods, next to {kpis}."
+readings = [
+    "If frequency rose while reach flattened or fell, the same people are seeing the ads more often, which supports creative fatigue or audience saturation.",
+    "If frequency stayed stable and reach held up, fatigue and saturation become less likely explanations.",
+    "If frequency rose only in some ad sets, check whether {kpis} worsened most in those same ad sets.",
+]
+if_unclear = "If the pattern is mixed, compare creative age and CTR for each ad to see whether the longest-running ads are losing response."
 
 [[investigation]]
 id = "creative_age"
 title = "Creative age"
 source = "external"
 detail = "Launch date and impressions of each active creative."
+look_at = "When each active ad was launched and how many impressions it has served, next to its CTR over time."
+readings = [
+    "If the ads carrying most of the spend are old and their CTR has been falling, creative fatigue becomes more likely.",
+    "If newer ads are losing clicks too, age alone is unlikely to explain it, so look at messaging, offer or audience fit instead.",
+]
+if_unclear = "If the creatives are of mixed age, compare CTR for each ad to see whether the decline is concentrated in the longest-running ones."
 
 [[investigation]]
 id = "ad_level_ctr"
 title = "CTR for each ad"
 source = "external"
 detail = "An ad-level export with CTR for each ad in both periods."
+look_at = "CTR for each ad in both periods, and how much spend each ad received."
+readings = [
+    "If a few long-running ads lost most of their CTR, creative fatigue is a likely candidate.",
+    "If ads launched or edited during the period have the lowest CTR, the new messaging or offer may be weaker than before.",
+    "If CTR fell evenly across old and new ads, the issue may lie outside the creative, such as the audience, placements or ad quality.",
+]
+if_unclear = "If no ad stands out, check Meta's quality and relevance rankings and results by audience next."
 
 [[investigation]]
 id = "creative_change_log"
 title = "Creative and messaging changes"
 source = "external"
 detail = "A record of creative, copy and offer changes made during the periods."
+look_at = "Which creatives, headlines, copy or offers changed between the two periods, and when."
+readings = [
+    "If CTR dropped soon after a creative or offer change, the new messaging may be less compelling. Testing it against the previous version would show whether that holds.",
+    "If nothing changed in the ads, weaker messaging becomes less likely, and fatigue, audience or placement factors deserve more attention.",
+]
+if_unclear = "If the timing of the changes and the decline overlap only loosely, run a controlled test of the old and new versions."
 
 [[investigation]]
 id = "audience_breakdown"
 title = "Results by audience"
 source = "external"
 detail = "Results by age, gender, region or audience segment for both periods."
+look_at = "{kpis} by age, gender, region or audience segment in both periods, and how spend was split between them."
+readings = [
+    "If spend moved toward segments that respond less well, a targeting, placement or audience shift may explain part of the change.",
+    "If one segment worsened sharply while others held steady, look at what changed for that segment, such as saturation or a weaker audience match.",
+    "If every segment worsened by a similar amount, audience factors are less likely, and account-wide or external causes deserve more attention.",
+]
+if_unclear = "If the segments are too small to compare reliably, use a longer period or check results by placement instead."
 
 [[investigation]]
 id = "targeting_change_log"
 title = "Targeting changes"
 source = "external"
 detail = "A record of targeting and audience changes made during the periods."
+look_at = "Targeting, audience, exclusion and Advantage+ setting changes made in either period, with their dates."
+readings = [
+    "If {kpis} worsened soon after a targeting change, that change may have moved delivery towards people who cost more to reach or respond less, so review it or test reverting it.",
+    "If targeting was unchanged, audience and placement changes become less likely, and auction, creative or seasonal factors deserve more attention.",
+]
+if_unclear = "Meta's automated targeting can shift delivery without any edit, so if the log shows nothing, compare results by audience and by placement."
 
 [[investigation]]
 id = "relevance_rankings"
 title = "Meta quality and relevance rankings"
 source = "external"
 detail = "Quality, engagement rate and conversion rate rankings for each ad."
+look_at = "Each ad's quality, engagement rate and conversion rate rankings in both periods."
+readings = [
+    "If rankings fell to below average for the ads carrying most of the spend, lower ad quality or relevance may be raising costs and reducing clicks.",
+    "If the conversion rate ranking fell while quality held, the problem may come after the click, such as the landing page experience.",
+    "If rankings stayed average or above, ad quality is a less likely explanation.",
+]
+if_unclear = "Rankings only appear once an ad has enough impressions. If they are missing, compare CTR for each ad instead."
 
 [[investigation]]
 id = "auction_benchmarks"
 title = "Auction and industry benchmarks"
 source = "external"
 detail = "Industry CPM benchmarks or auction overlap data for the same weeks."
+look_at = "Industry or category CPM benchmarks, or auction overlap data, for the same weeks."
+readings = [
+    "If benchmark CPMs rose by a similar amount, market-wide auction competition may account for much of the increase, and account changes become less likely.",
+    "If benchmarks stayed flat while your CPM rose, the cause is more likely specific to your account, such as targeting, budget or ad quality.",
+]
+if_unclear = "Benchmarks are broad averages. If none match your market, compare the same weeks last year instead."
 
 [[investigation]]
 id = "last_year"
 title = "Same period last year"
 source = "external"
 detail = "CPM for the same weeks last year, to separate seasonality from account changes."
+look_at = "CPM and results for the same weeks last year, compared with the weeks around them."
+readings = [
+    "If CPM rose at the same time last year, seasonality may explain part of the increase, although that does not prove it.",
+    "If last year was flat at this time, seasonality is less likely, so account changes and auction competition deserve a closer look.",
+]
+if_unclear = "If the account was set up very differently last year, use industry benchmarks for the same weeks instead."
 
 [[investigation]]
 id = "placement_breakdown"
 title = "Results by placement"
 source = "external"
 detail = "CPM and results by placement for both periods."
+look_at = "{kpis} and spend by placement, such as Feed, Stories, Reels and Audience Network, in both periods."
+readings = [
+    "If spend moved toward placements with higher costs or weaker results, a placement shift may explain part of the change.",
+    "If one placement worsened while its share of spend stayed the same, look at how the creative fits that placement and who it reaches there.",
+    "If the placement mix barely changed, placement factors are less likely, and audience or creative factors deserve more attention.",
+]
+if_unclear = "If Advantage+ placements spread delivery thinly, compare the two or three placements with the most spend."
 
 [[investigation]]
 id = "account_change_log"
 title = "Account change history"
 source = "external"
 detail = "Meta Ads Manager's change history for budgets, structure and settings."
+look_at = "Budget, bid strategy, campaign structure and setting changes in the change history, with their dates."
+readings = [
+    "If {kpis} worsened soon after a budget increase, a bid strategy change or a restructure, those changes may have contributed and are worth reviewing first.",
+    "If there were no relevant changes, account structure and budget changes become less likely, so consider auction competition, audience and ad quality instead.",
+]
+if_unclear = "If several changes happened at once, compare the affected campaigns separately to see which change lines up with the shift."
 
 [[investigation]]
 id = "page_performance"
 title = "Landing page speed and errors"
 source = "external"
 detail = "Page load times and error rates for the landing pages, from site analytics."
+look_at = "Load times, error rates and failed page loads for the landing pages in both periods, especially on mobile."
+readings = [
+    "If load times or errors increased, slow or failing pages may explain why fewer clicks turn into page views.",
+    "If the pages performed normally, page speed is less likely, and tracking or the match between ad and page deserve a closer look.",
+]
+if_unclear = "If site analytics cover only part of the traffic, open the advertised links directly on several devices."
 
 [[investigation]]
 id = "tracking_diagnostics"
 title = "Tracking diagnostics"
 source = "external"
 detail = "Pixel and Conversions API event diagnostics for the periods."
+look_at = "Pixel and Conversions API diagnostics for missing, duplicated or delayed events in both periods."
+readings = [
+    "If events dropped out or changed during the period, part of the {kpis} change may be a counting problem rather than a real change in shopper behaviour, so fix the tracking before acting on other causes.",
+    "If tracking was healthy in both periods, the change is more likely real, and the website and traffic checks become more important.",
+]
+if_unclear = "If the diagnostics are inconclusive, compare Meta's event counts with your site analytics or order system for the same days."
 
 [[investigation]]
 id = "ad_page_review"
 title = "Ad and landing page review"
 source = "external"
 detail = "A side-by-side review of each ad's promise and the page it links to."
+look_at = "Each ad's promise, offer and product next to the page it links to."
+readings = [
+    "If ads promise something the page doesn't show clearly, such as a price, offer or product, visitors may leave early, which supports an ad and landing page mismatch.",
+    "If ads and pages match well, a mismatch is less likely, and page speed or product content deserve more attention.",
+]
+if_unclear = "If the match is a matter of judgement, test sending the same ad to a page that repeats its message."
 
 [[investigation]]
 id = "page_engagement"
 title = "Product page engagement"
 source = "external"
 detail = "Time on page, scroll depth and exits for the advertised product pages."
+look_at = "Time on page, scroll depth and exits for the advertised product pages in both periods."
+readings = [
+    "If visitors leave sooner or scroll less than before, the page content may not be persuading them, which supports a product page content problem.",
+    "If engagement held steady but fewer visitors added to cart, price, offer or stock become more likely explanations.",
+]
+if_unclear = "If engagement data is limited, review recent product page changes in the website change log."
 
 [[investigation]]
 id = "site_change_log"
 title = "Website change log"
 source = "external"
 detail = "A record of website, cart and checkout changes made during the periods."
+look_at = "Website, product page, cart and checkout changes made in either period, with their dates."
+readings = [
+    "If {kpis} worsened soon after a site change, that change may have added friction, so review it or test the previous version.",
+    "If nothing changed on the site, site-side causes become less likely, and traffic quality, price or tracking deserve more attention.",
+]
+if_unclear = "If several changes overlap, check completion for each checkout step to find where shoppers now drop out."
 
 [[investigation]]
 id = "price_offer_log"
 title = "Price and offer history"
 source = "external"
 detail = "Prices and offers for the advertised products in both periods."
+look_at = "Prices, offers and discounts for the advertised products in both periods, and competitors' prices where available."
+readings = [
+    "If prices rose or an offer ended, shoppers may be less willing to buy, which supports a price or offer explanation.",
+    "If prices were cut, each order may be worth less, which could explain a lower average order value.",
+    "If prices and offers were unchanged, pricing becomes a less likely explanation.",
+]
+if_unclear = "If the changes were small, compare results for the products whose price changed with those whose price did not."
 
 [[investigation]]
 id = "stock_records"
 title = "Stock levels"
 source = "external"
 detail = "Stock and size availability for the advertised products."
+look_at = "Stock and size availability for the advertised products in both periods."
+readings = [
+    "If advertised products or popular sizes were out of stock, visitors may have left without adding to cart, and ads for those products may be worth pausing.",
+    "If stock was available throughout, stock problems are an unlikely explanation.",
+]
+if_unclear = "If stock records are only daily or weekly, compare the add-to-cart rate for the affected products with the rest."
 
 [[investigation]]
 id = "cart_analytics"
 title = "Cart behaviour"
 source = "external"
 detail = "Cart page exits and errors from site analytics."
+look_at = "Cart page exits, errors and time spent in the cart in both periods."
+readings = [
+    "If cart exits or errors increased, the cart experience may be stopping shoppers from reaching checkout.",
+    "If the cart behaves as before, look at shipping costs or account requirements shown at this step.",
+]
+if_unclear = "If analytics don't track the cart separately, test the cart yourself on several devices and browsers."
 
 [[investigation]]
 id = "shipping_log"
 title = "Shipping costs shown"
 source = "external"
 detail = "Shipping prices and free-shipping thresholds shown in the cart and checkout."
+look_at = "Shipping prices and free-shipping thresholds shown in the cart and checkout in both periods."
+readings = [
+    "If shipping costs or the free-shipping threshold went up, unexpected costs may be leading shoppers to abandon.",
+    "If shipping costs were unchanged, they are a less likely explanation, unless they are now shown later in the journey.",
+]
+if_unclear = "If the changes were small, compare drop-out for baskets just below and just above the free-shipping threshold."
 
 [[investigation]]
 id = "checkout_steps"
 title = "Checkout step completion"
 source = "external"
 detail = "Completion rates for each checkout step, including login and forms."
+look_at = "Completion rates for each checkout step, including login or account creation and the forms."
+readings = [
+    "If drop-out rose at the login or account step, a required account may be putting shoppers off.",
+    "If drop-out rose at a form step, that step's usability is the most likely place to look.",
+    "If no single step stands out, payment problems or tracking deserve a closer look.",
+]
+if_unclear = "If step-level data isn't available, review recent checkout changes in the website change log."
 
 [[investigation]]
 id = "payment_logs"
 title = "Payment logs"
 source = "external"
 detail = "Payment gateway errors and payment method usage for both periods."
+look_at = "Payment gateway errors, declines and the payment methods used in both periods."
+readings = [
+    "If errors or declines rose, failed payments may explain purchases lost at the final step.",
+    "If a payment method was removed or stopped working, shoppers who prefer it may have left, which supports a payment options explanation.",
+    "If errors and payment methods were stable, payment causes become less likely.",
+]
+if_unclear = "If the logs are incomplete, test a purchase with each payment method on mobile and desktop."
 
 [[investigation]]
 id = "order_data"
 title = "Order-level data"
 source = "external"
 detail = "Products, quantities and discounts for each order in both periods."
+look_at = "Products, quantities and discounts for each order in both periods."
+readings = [
+    "If the share of lower-priced products rose, a product mix shift may explain the lower order value.",
+    "If customers bought fewer items per order, smaller baskets are a likely contributor.",
+    "If the discount per order grew, deeper or more frequent discounts may be reducing order value.",
+]
+if_unclear = "If no single pattern dominates, compare order value for each campaign to see whether one campaign drives the change."
 
 [[investigation]]
 id = "promo_calendar"
 title = "Promotion calendar"
 source = "external"
 detail = "Promotions, bundles and discount codes active in each period."
+look_at = "Promotions, bundles and discount codes active in each period."
+readings = [
+    "If a bigger or new discount ran in the current period, it may explain lower order values.",
+    "If a bundle or higher-value promotion ended, order values may simply have returned to their usual level.",
+    "If the promotions were the same in both periods, promotion changes are an unlikely explanation.",
+]
+if_unclear = "If promotions overlap, compare the value of orders with and without a discount code."
 
 [[investigation]]
 id = "funnel_export"
 title = "Funnel stage export"
 source = "external"
 detail = "A Meta export that includes landing page views, adds to cart and checkouts initiated."
+look_at = "A Meta export that adds landing page views, adds to cart and checkouts initiated for both periods."
+readings = [
+    "With those columns, Funnel Magnet can show which funnel stage accounts for the {kpis} change mathematically, which would make the website and tracking checks far more specific.",
+]
+if_unclear = "If Meta can't export some stages, use your site analytics for the same days instead."

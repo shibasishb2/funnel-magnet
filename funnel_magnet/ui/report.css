@@ -117,3 +117,5 @@ section.executive { border-left-color: var(--ink); }
 h2.part { border-top: 1px solid var(--line); margin-top: 36px; padding-top: 20px; }
 .source { border-radius: 4px; color: var(--muted); font-size: 0.85rem; padding: 4px 8px; background: var(--soft); }
 .source-synthetic { background: #fff3e0; color: #8a3b00; font-weight: 600; }
+.reading p { margin: 4px 0; }
+.reading ul { margin: 0 0 4px; }

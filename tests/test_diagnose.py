@@ -1,3 +1,5 @@
+from datetime import date, timedelta
+
 import pandas as pd
 import pytest
 
@@ -8,6 +10,7 @@ from funnel_magnet.diagnose import (
     diagnose_totals,
     run_diagnosis,
 )
+from funnel_magnet import diagnose
 from funnel_magnet.metrics import Totals
 from funnel_magnet.periods import InsufficientPeriodsError, MONTHLY, WEEKLY, list_complete_periods
 
@@ -346,7 +349,52 @@ def test_recent_period_and_campaign_mix_warnings():
     data = pd.concat(
         [daily_data("2026-06-01", "2026-06-14"), daily_data("2026-06-01", "2026-06-14", campaign="B")]
     )
-    warnings = run_diagnosis(data, WEEKLY).warnings
+    warnings = run_diagnosis(data, WEEKLY, analysis_date=date(2026, 6, 16)).warnings
 
-    assert any("late-attributed" in item for item in warnings)
+    assert any("ended 2 days before this analysis" in item and "can't be verified" in item for item in warnings)
     assert any("several campaigns" in item for item in warnings)
+
+
+def test_a_historical_period_gets_no_attribution_delay_warning():
+    data = daily_data("2026-06-01", "2026-06-14")
+
+    warnings = run_diagnosis(data, WEEKLY, analysis_date=date(2026, 11, 3)).warnings
+
+    assert not any("before this analysis" in item or "recent" in item for item in warnings)
+    # The missing setting is still reported, as before.
+    assert any("no attribution setting" in item for item in warnings)
+
+
+@pytest.mark.parametrize(
+    "setting, days_after, warned",
+    [("7-day click", 3, True), ("7-day click", 7, False), ("7-day click or 1-day view", 6, True),
+     ("1-day click", 2, False), ("28-day click", 20, True)],
+)
+def test_a_stated_attribution_window_decides_the_delay_warning(setting, days_after, warned):
+    data = daily_data("2026-06-01", "2026-06-14", attribution_setting=setting)
+
+    warnings = run_diagnosis(data, WEEKLY, analysis_date=date(2026, 6, 14) + timedelta(days=days_after)).warnings
+    delay = [item for item in warnings if "attribution window" in item]
+
+    assert bool(delay) is warned
+    if warned:
+        assert f"inside the {diagnose.attribution_window_days([setting])}-day attribution window" in delay[0]
+        assert "still" not in delay[0]
+
+
+def test_an_unknown_window_never_claims_purchases_are_still_arriving():
+    data = daily_data("2026-06-01", "2026-06-14")
+
+    warning = next(item for item in run_diagnosis(data, WEEKLY, analysis_date=date(2026, 6, 15)).warnings
+                   if "before this analysis" in item)
+
+    assert "can't be verified" in warning and "still be added" not in warning
+
+
+def test_the_analysis_date_changes_only_the_attribution_warning():
+    data = daily_data("2026-06-01", "2026-06-14")
+    recent = run_diagnosis(data, WEEKLY, analysis_date=date(2026, 6, 15))
+    later = run_diagnosis(data, WEEKLY, analysis_date=date(2026, 11, 4))
+
+    assert recent.changes == later.changes and recent.paths == later.paths and recent.drivers == later.drivers
+    assert [w for w in recent.warnings if "before this analysis" not in w] == later.warnings

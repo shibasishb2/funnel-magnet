@@ -254,7 +254,7 @@ def _executive_section(item):
         '<article class="card exec-check">'
         f'<div class="card-tag">Priority {c.rank} · {escape(c.where)}</div>'
         f"<p><strong>{escape(c.title)}.</strong> {escape(c.what)}</p>"
-        + (f"<p><strong>What it could mean:</strong> {escape(c.could_mean)}</p>" if c.could_mean else "")
+        + _interpretation_html(c)
         + (f'<p class="note">Why first: {escape(c.why_first)}</p>' if c.why_first else "")
         + _ai_note("Why the AI ranks it here", c.ai_note)
         + "</article>"
@@ -305,9 +305,21 @@ def _causes_section(item):
     )
 
 
+def _interpretation_html(item):
+    """The same interpretation the dashboard shows, in report styling."""
+    if not item.readings:
+        return ""
+    readings = "".join(f"<li>{escape(reading)}</li>" for reading in item.readings)
+    return (
+        f'<div class="reading"><p><strong>What to look at:</strong> {escape(item.look_at)}</p>'
+        f"<p><strong>What the result could mean:</strong></p><ul>{readings}</ul>"
+        f"<p><strong>If the result is unclear:</strong> {escape(item.if_unclear)}</p></div>"
+    )
+
+
 def _check_html(check):
     return (
-        f"<li><strong>{escape(check.title)}</strong> · {_where(check)}. {escape(check.detail)} "
+        f"<li><strong>{escape(check.title)}</strong> · {_where(check)}. {escape(check.detail)}{_interpretation_html(check)} "
         f'<span class="note">Helps test: {escape(", ".join(check.tests))}.</span>'
         f"{_ai_note('AI', check.ai_note)}</li>"
     )
@@ -322,6 +334,7 @@ def _investigations_section(item):
             '<article class="card priority">'
             f'<div class="card-tag">Priority {rank} · {_where(check)}</div>'
             f"<p><strong>{escape(check.title)}.</strong> {escape(check.detail)}</p>"
+            + _interpretation_html(check)
             + (f"<p><strong>Why first:</strong> {escape(check.reason)}</p>" if check.reason else "")
             + _ai_note("Why the AI ranks it here", check.ai_note)
             + f'<p class="note">Helps test: {escape(", ".join(check.tests))}.</p></article>'

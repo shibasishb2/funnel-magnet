@@ -217,6 +217,10 @@ The tree follows every material change, whether it raised or lowered ROAS. It al
 
 A metric with a zero or missing denominator is undefined. Contributions that depend on an undefined or zero value are not calculated, and the result gives the reason.
 
+An attribution-delay warning appears only when the current period ended recently. If the file states its attribution window, such as 7-day click, the warning appears while the period is inside that window on the analysis date, which is today by default. If the file doesn't state it, a period that ended fewer than seven days before the analysis gets a note that completeness can't be verified. Seven days is a cut-off for that note, not an assumed window, and an older period isn't guaranteed to be complete. The analysis date affects nothing else.
+
+Each investigation in the playbook says what to look at, what different results could mean, and what to check next if the result is unclear. These readings are possibilities, never proof of a cause.
+
 A blank cell is not treated as zero. A missing funnel value excludes that stage from any period containing it, and a blank in link clicks, purchases or purchase value blocks the file. Only if the user confirms that blanks mean 0 does `load_meta_csv(source, blank_actions_as_zero=True)` read them as 0.
 
 An account-level export with no campaign column is analysed as one total labelled "All campaigns", with a warning, and no campaign breakdown is offered. When both "Website landing page views" and "Landing page views" are exported, the funnel uses the website column, and any row where the two differ is reported as a warning.

@@ -106,14 +106,41 @@ def test_funnel_problems_put_the_tracking_step_among_the_next_steps(name):
     assert "Tracking problem" in [s.cause for s in summary.next_steps]
 
 
-def test_could_mean_comes_from_the_playbook_links():
-    diagnosis, marketing, _, _ = scenario("CTR decline")
-    check = executive.build(diagnosis, marketing).checks[0]
-    tests = next(i for i in marketing.top_investigations if i.title == check.title).tests
+@pytest.mark.parametrize("name", ALL)
+def test_every_investigation_explains_what_to_look_at_and_what_results_could_mean(name):
+    diagnosis, marketing, _, _ = scenario(name)
+    labels = {move.label for move in marketing.problems}
 
-    for cause in tests:
-        assert cause in check.could_mean
-    assert "more likely" in check.could_mean and "less likely" in check.could_mean
+    for item in marketing.investigations:
+        texts = [item.look_at, *item.readings, item.if_unclear]
+        assert all(texts) and len(item.readings) >= 1
+        assert not any("{" in text for text in texts)
+        # Results are possibilities: nothing is presented as proof.
+        assert not any(re.search(r"\b(confirms?|proven|definitely|certainly)\b", text, re.I) for text in texts)
+        assert not any(re.search(r"\bproves?\b", text) and "not prove" not in text for text in texts)
+    # The generic checks name the KPIs that actually worsened.
+    split = next((i for i in marketing.investigations if i.id == "campaign_split"), None)
+    if split:
+        assert all(label in split.readings[0] for label in labels)
+
+
+def test_readings_are_specific_rather_than_repeated():
+    readings = [r for item in playbook.load_playbook().investigations.values() for r in item["readings"]]
+
+    assert len(readings) == len(set(readings))
+    assert not any("makes that cause more likely" in reading for reading in readings)
+
+
+def test_level_one_shows_each_top_check_interpretation():
+    diagnosis, marketing, _, _ = scenario("CPM inflation")
+    summary = executive.build(diagnosis, marketing)
+
+    for check, item in zip(summary.checks, marketing.top_investigations):
+        assert (check.look_at, check.readings, check.if_unclear) == (item.look_at, item.readings, item.if_unclear)
+    assert summary.checks[0].readings[0] == (
+        "If CPM worsened mainly in one campaign, look for changes specific to that campaign, "
+        "such as its budget, bidding, audience or creative."
+    )
 
 
 def test_data_notes_are_short_and_complete():
@@ -160,11 +187,16 @@ def test_page_and_report_show_the_same_executive_diagnosis(name):
     assert html.index('<section class="executive">') < html.index("1. A. Confirmed findings")
     pieces = [summary.headline, *summary.narrative, *summary.data_notes]
     pieces += [part for p in summary.problems for part in (p.change, p.effect, p.why) if part]
-    pieces += [part for c in summary.checks for part in (c.title, c.what, c.could_mean, c.why_first) if part]
+    pieces += [part for c in summary.checks for part in (c.title, c.what, c.look_at, *c.readings, c.if_unclear, c.why_first) if part]
     pieces += [part for s in summary.next_steps for part in (s.text, s.cause)]
     for piece in pieces:
         assert escape(piece) in page and escape(piece) in executive_part, piece
     assert page.count("Hidden by overall ROAS") == executive_part.count("Hidden by overall ROAS")
+    # Section C shows the same interpretation for every check, on the page and in the report.
+    section_c = render.investigations_html(marketing)
+    for item in marketing.investigations:
+        for piece in (item.look_at, *item.readings, item.if_unclear):
+            assert escape(piece) in section_c and escape(piece) in html
 
 
 def test_next_steps_read_as_plain_professional_english():

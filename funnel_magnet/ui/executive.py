@@ -11,7 +11,6 @@ from funnel_magnet.diagnose import Status
 from funnel_magnet.ui import view
 
 NEXT_STEPS = 3
-EVERY_PROBLEM = "Every problem above"
 
 
 @dataclass(frozen=True)
@@ -30,7 +29,9 @@ class TopCheck:
     where: str
     what: str
     why_first: str
-    could_mean: str
+    look_at: str
+    readings: tuple[str, ...]
+    if_unclear: str
     ai_note: str = ""
 
 
@@ -176,24 +177,7 @@ def _problems(diagnosis, marketing):
     return tuple(items)
 
 
-def _could_mean(item, cause_titles):
-    causes = [test for test in item.tests if test in cause_titles]
-    parts = []
-    if causes:
-        parts.append(
-            f"A result that fits {_join(causes, 'or')} makes that cause more likely. "
-            "A result that doesn't makes it less likely."
-        )
-    for test in item.tests:
-        if test == EVERY_PROBLEM:
-            parts.append("It applies to every problem above.")
-        elif test not in cause_titles:
-            parts.append(f"It shows {test[0].lower()}{test[1:]}.")
-    return " ".join(dict.fromkeys(parts))
-
-
 def _checks(marketing):
-    cause_titles = {cause.title for cause in marketing.causes}
     return tuple(
         TopCheck(
             rank,
@@ -201,7 +185,9 @@ def _checks(marketing):
             "In your upload" if item.available else "Collect outside this app",
             item.detail,
             item.reason,
-            _could_mean(item, cause_titles),
+            item.look_at,
+            item.readings,
+            item.if_unclear,
             item.ai_note,
         )
         for rank, item in enumerate(marketing.top_investigations, 1)

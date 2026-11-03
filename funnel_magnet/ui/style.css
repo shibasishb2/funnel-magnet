@@ -205,3 +205,6 @@
 .fm-hidden { background: #fff3e0; border-radius: 4px; color: #8a3b00; font-size: 0.75rem; font-weight: 600; padding: 1px 6px; white-space: nowrap; }
 .fm-source { border-radius: 4px; color: var(--fm-muted); font-size: 0.82rem; margin: 6px 0; padding: 4px 8px; background: #f4f6f8; }
 .fm-source-synthetic { background: #fff3e0; color: #8a3b00; font-weight: 600; }
+.fm-reading { margin: 4px 0 6px; }
+.fm-reading p { margin: 4px 0; }
+.fm-reading ul { margin: 0 0 4px; }

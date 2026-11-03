@@ -8,7 +8,9 @@ explained too. It also looks beneath a stable metric whose inputs moved
 materially, because opposing moves can cancel out in the parent.
 """
 
+import re
 from dataclasses import dataclass, field
+from datetime import date
 from enum import Enum
 
 from funnel_magnet.decompose import Decomposition, Factor, decompose
@@ -24,6 +26,9 @@ from funnel_magnet.periods import aggregate, latest_two_complete, select_rows
 
 DEFAULT_MATERIALITY_THRESHOLD = 0.05
 MIN_PURCHASES_PER_PERIOD = 30
+# When a file doesn't state its attribution window, a current period that ended fewer than this
+# many days before the analysis gets a note that completeness can't be verified. This is not an
+# assumed attribution window, and an older period is not guaranteed to be complete.
 MAX_ATTRIBUTION_LAG_DAYS = 7
 
 DRIVER_STATEMENT = (
@@ -358,7 +363,38 @@ def diagnose_totals(prior, current, threshold=DEFAULT_MATERIALITY_THRESHOLD,
     return diagnosis
 
 
-def _add_data_warnings(diagnosis, data, prior_period, current_period, campaign):
+def attribution_window_days(settings):
+    """The longest window named in settings such as "7-day click or 1-day view", or None."""
+    days = [int(n) for setting in settings for n in re.findall(r"(\d+)\s*-?\s*day", str(setting), re.IGNORECASE)]
+    return max(days) if days else None
+
+
+def _attribution_delay_warning(settings, current_period, analysis_date):
+    """Warn only when the current period ended recently enough for late purchases to matter.
+
+    Meta can credit a purchase to an ad for days after the click, so a period that ended
+    inside the attribution window may gain purchases in a later export. Without a stated
+    window, the app can't tell, so it says that rather than claiming purchases are missing.
+    """
+    since_end = max((analysis_date - current_period.end.date()).days, 0)
+    window = attribution_window_days(settings)
+    ended = f"The current period ended {since_end} day{'' if since_end == 1 else 's'} before this analysis"
+    if window is not None:
+        if since_end < window:
+            return (
+                f"{ended}, inside the {window}-day attribution window. Purchases credited after "
+                "the export are not included, so the current period may look weaker than it will later."
+            )
+        return None
+    if since_end < MAX_ATTRIBUTION_LAG_DAYS:
+        return (
+            f"{ended}, and the file doesn't state the attribution window, so it can't be verified "
+            "whether every attributed purchase is included."
+        )
+    return None
+
+
+def _add_data_warnings(diagnosis, data, prior_period, current_period, campaign, analysis_date):
     for period, label in ((prior_period, "prior"), (current_period, "current")):
         rows = select_rows(data, period, campaign)
         days = rows["date"].nunique()
@@ -375,9 +411,10 @@ def _add_data_warnings(diagnosis, data, prior_period, current_period, campaign):
                     "so that stage is excluded rather than counted as zero."
                 )
 
+    settings = [set(), set()]
     if "attribution_setting" in data:
         settings = [
-            set(select_rows(data, period, campaign)["attribution_setting"]) - {""}
+            set(select_rows(data, period, campaign)["attribution_setting"].dropna().astype(str)) - {""}
             for period in (prior_period, current_period)
         ]
         if settings[0] != settings[1] or len(settings[0]) > 1:
@@ -387,10 +424,9 @@ def _add_data_warnings(diagnosis, data, prior_period, current_period, campaign):
     else:
         diagnosis.warnings.append("The file has no attribution setting, so comparability could not be checked.")
 
-    if (data["date"].max() - current_period.end).days < MAX_ATTRIBUTION_LAG_DAYS:
-        diagnosis.warnings.append(
-            "The current period is recent, so late-attributed purchases may still be added."
-        )
+    delay = _attribution_delay_warning(settings[1], current_period, analysis_date)
+    if delay:
+        diagnosis.warnings.append(delay)
 
     if campaign is None and data["campaign"].nunique() > 1:
         diagnosis.warnings.append(
@@ -400,8 +436,11 @@ def _add_data_warnings(diagnosis, data, prior_period, current_period, campaign):
 
 
 def run_diagnosis(data, granularity, threshold=DEFAULT_MATERIALITY_THRESHOLD, prior_period=None,
-                  current_period=None, campaign=None, min_purchases=MIN_PURCHASES_PER_PERIOD):
-    """Diagnose a canonical dataset. Defaults to the latest two complete periods."""
+                  current_period=None, campaign=None, min_purchases=MIN_PURCHASES_PER_PERIOD, analysis_date=None):
+    """Diagnose a canonical dataset. Defaults to the latest two complete periods.
+
+    analysis_date, today by default, only decides whether the attribution-delay warning applies.
+    """
     if campaign is not None and campaign not in set(data["campaign"]):
         raise ValueError(f"Campaign not found: {campaign}")
 
@@ -418,5 +457,5 @@ def run_diagnosis(data, granularity, threshold=DEFAULT_MATERIALITY_THRESHOLD, pr
     )
     diagnosis.prior_label = prior_period.label
     diagnosis.current_label = current_period.label
-    _add_data_warnings(diagnosis, data, prior_period, current_period, campaign)
+    _add_data_warnings(diagnosis, data, prior_period, current_period, campaign, analysis_date or date.today())
     return diagnosis

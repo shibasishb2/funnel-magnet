@@ -6,6 +6,7 @@ action here comes from the playbook, never from a model. Causes are possibilitie
 a person to test. Only part A states what the data establishes.
 """
 
+import re
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -28,6 +29,10 @@ TOP_INVESTIGATIONS = 3
 # Checks that confirm the numbers are measured correctly. A funnel drop can be a
 # counting fault, so these come first whenever a funnel stage worsened.
 MEASUREMENT_CHECKS = frozenset({"tracking_diagnostics"})
+# An investigation's readings say what a result could mean. None may claim proof.
+OVERCLAIM = re.compile(r"\b(confirms?|confirmed|proven|definitely|certainly)\b", re.IGNORECASE)
+PROVES = re.compile(r"\bproves?\b", re.IGNORECASE)
+NOT_PROVES = re.compile(r"\b(?:not|n't)\s+prove\b", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -72,6 +77,9 @@ class InvestigationItem:
     tests: tuple[str, ...]
     reason: str = ""
     ai_note: str = ""
+    look_at: str = ""
+    readings: tuple[str, ...] = ()
+    if_unclear: str = ""
 
 
 @dataclass(frozen=True)
@@ -147,6 +155,12 @@ def load_playbook(path=PLAYBOOK_PATH):
         _check(item.get("title") and item.get("detail"), f"investigation {item['id']} needs a title and detail.")
         if item["source"] != "external":
             _check(item.get("unavailable_detail"), f"investigation {item['id']} needs unavailable_detail.")
+        texts = [item.get("look_at"), *item.get("readings", []), item.get("if_unclear")]
+        _check(all(texts) and item.get("readings"), f"investigation {item['id']} needs look_at, readings and if_unclear.")
+        for text in texts:
+            _check(not OVERCLAIM.search(text) and (not PROVES.search(text) or NOT_PROVES.search(text)),
+                   f"investigation {item['id']} presents a result as proof.")
+            _check(set(re.findall(r"\{[^}]*\}", text)) <= {"{kpis}"}, f"investigation {item['id']} has an unknown placeholder.")
     for cause in causes:
         name = cause.get("id")
         _check(" may " in f" {cause.get('statement', '')} ", f"cause {name} must be hedged with 'may'.")
@@ -343,6 +357,9 @@ def build(diagnosis, currency=None, several_campaigns=False, earlier_periods=Fal
     investigations = []
     for entry in _rank(list(checks.values()), _shares(diagnosis, problems), labels, has_funnel_problem):
         item = playbook.investigations[entry["id"]]
+        # Name the KPIs this check covers, as in "If CPM worsened mainly in one campaign".
+        names = [view.metric_label(m) for m in entry["kpis"]] or ["these KPIs"]
+        kpis = names[0] if len(names) == 1 else f"{', '.join(names[:-1])} and {names[-1]}"
         investigations.append(
             InvestigationItem(
                 id=entry["id"],
@@ -351,6 +368,9 @@ def build(diagnosis, currency=None, several_campaigns=False, earlier_periods=Fal
                 available=entry["available"],
                 tests=tuple(dict.fromkeys(entry["tests"])),
                 reason=entry.get("reason", ""),
+                look_at=item["look_at"].replace("{kpis}", kpis),
+                readings=tuple(reading.replace("{kpis}", kpis) for reading in item["readings"]),
+                if_unclear=item["if_unclear"].replace("{kpis}", kpis),
             )
         )
 

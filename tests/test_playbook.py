@@ -48,6 +48,9 @@ def test_playbook_loads_and_every_cause_is_hedged():
         ('investigations = ["frequency_reach", "creative_age", "ad_level_ctr"]', 'investigations = ["made_up"]', "unknown investigation"),
         ('explains = ["aov"]\ninvestigations = ["order_data"]\nif_supported = "Promote', 'explains = ["revenue"]\ninvestigations = ["order_data"]\nif_supported = "Promote', "unknown metric"),
         ('source = "campaigns"', 'source = "somewhere"', "unknown source"),
+        ('if_unclear = "Comparing campaigns', 'unclear = "Comparing campaigns', "needs look_at, readings and if_unclear"),
+        ('a campaign mix shift may explain part', 'a campaign mix shift confirms part', "presents a result as proof"),
+        ('in both periods, next to {kpis}', 'in both periods, next to {kpi}', "unknown placeholder"),
     ],
 )
 def test_a_broken_playbook_fails_loudly(tmp_path, old, new, message):

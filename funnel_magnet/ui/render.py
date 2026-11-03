@@ -183,9 +183,21 @@ def _where(item):
     return "In your upload" if item.available else "Collect outside this app"
 
 
+def interpretation_html(item):
+    """What to look at, what a result could mean, and what to do if it's unclear."""
+    if not item.readings:
+        return ""
+    readings = "".join(f"<li>{escape(reading)}</li>" for reading in item.readings)
+    return (
+        f'<div class="fm-reading"><p><strong>What to look at:</strong> {escape(item.look_at)}</p>'
+        f"<p><strong>What the result could mean:</strong></p><ul>{readings}</ul>"
+        f"<p><strong>If the result is unclear:</strong> {escape(item.if_unclear)}</p></div>"
+    )
+
+
 def _check_html(item):
     return (
-        f"<li><strong>{escape(item.title)}</strong> · {_where(item)}. {escape(item.detail)}"
+        f"<li><strong>{escape(item.title)}</strong> · {_where(item)}. {escape(item.detail)}{interpretation_html(item)}"
         f'<div class="fm-panel-note">Helps test: {escape(", ".join(item.tests))}.</div>'
         f"{_ai_note('AI', item.ai_note)}</li>"
     )
@@ -196,7 +208,7 @@ def _top_check_html(rank, item):
     return (
         '<article class="fm-ai-card fm-priority">'
         f'<div class="fm-ai-card-tag">Priority {rank} · {_where(item)}</div>'
-        f"<p><strong>{escape(item.title)}.</strong> {escape(item.detail)}</p>{why}"
+        f"<p><strong>{escape(item.title)}.</strong> {escape(item.detail)}</p>{interpretation_html(item)}{why}"
         f"{_ai_note('Why the AI ranks it here', item.ai_note)}"
         f'<p class="fm-panel-note">Helps test: {escape(", ".join(item.tests))}.</p></article>'
     )
@@ -255,7 +267,7 @@ def executive_html(summary):
         '<article class="fm-ai-card fm-exec-check">'
         f'<div class="fm-ai-card-tag">Priority {c.rank} · {escape(c.where)}</div>'
         f"<p><strong>{escape(c.title)}.</strong> {escape(c.what)}</p>"
-        + (f"<p><strong>What it could mean:</strong> {escape(c.could_mean)}</p>" if c.could_mean else "")
+        + interpretation_html(c)
         + (f'<p class="fm-panel-note">Why first: {escape(c.why_first)}</p>' if c.why_first else "")
         + _ai_note("Why the AI ranks it here", c.ai_note)
         + "</article>"

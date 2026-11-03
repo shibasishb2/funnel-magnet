@@ -287,7 +287,7 @@ def test_healthy_control_reports_no_drivers():
         ("add_to_carts_to_checkouts_initiated is above 100%", "Funnel data"),
         ("At least one period has fewer than 30 purchases, so treat results as directional.", "Low purchase volume"),
         ("Attribution settings differ", "Attribution"),
-        ("late-attributed purchases may still be added", "Attribution"),
+        ("The current period ended 2 days before this analysis, inside the 7-day attribution window.", "Attribution"),
         ("The file has no attribution setting", "Attribution"),
         ("The prior period has zero purchases", "Undefined metrics"),
         ("Results combine several campaigns.", "Other data checks"),
