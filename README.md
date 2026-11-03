@@ -167,6 +167,8 @@ A metric with a zero or missing denominator is undefined. Contributions that dep
 
 A blank cell is not treated as zero. A missing funnel value excludes that stage from any period containing it, and a blank in link clicks, purchases or purchase value blocks the file. Only if the user confirms that blanks mean 0 does `load_meta_csv(source, blank_actions_as_zero=True)` read them as 0.
 
+An account-level export with no campaign column is analysed as one total labelled "All campaigns", with a warning, and no campaign breakdown is offered. When both "Website landing page views" and "Landing page views" are exported, the funnel uses the website column, and any row where the two differ is reported as a warning.
+
 Dates and number formats are read at file level. A file is accepted only when one reading fits every value, so `13/06/2026` settles the day and month order for the whole file. If two readings remain possible, or none fits, the file is rejected with a reason.
 
 The engine reports mathematical drivers only. It does not state causes.

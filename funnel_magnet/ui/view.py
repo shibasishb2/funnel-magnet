@@ -11,7 +11,7 @@ SAMPLES_DIR = Path(__file__).resolve().parents[2] / "data" / "samples"
 
 KPI_ORDER = ("roas", "aov", "cpa", "cpc", "cvr", "cpm", "ctr")
 CURRENCY_METRICS = ("aov", "cpa", "cpc", "cpm")
-CURRENCY_SYMBOLS = {"EUR": "€", "USD": "$", "GBP": "£"}
+CURRENCY_SYMBOLS = {"EUR": "€", "USD": "$", "GBP": "£", "INR": "₹"}
 
 METRIC_LABELS = {
     "roas": "ROAS",

@@ -12,6 +12,9 @@ from funnel_magnet.metrics import OPTIONAL_STAGES, Totals, compute_metrics
 ERROR = "error"
 WARNING = "warning"
 
+# Account-level exports have no campaign column, so every row gets this label.
+ACCOUNT_LEVEL_CAMPAIGN = "All campaigns"
+
 REQUIRED_MEASURES = ("spend", "impressions", "link_clicks", "purchases", "purchase_value")
 ACTION_MEASURES = ("link_clicks", "purchases", "purchase_value")
 
@@ -50,7 +53,7 @@ ALIASES = {
         "website purchases conversion value",
         "purchase value",
     ),
-    "landing_page_views": ("landing page views", "website landing page views"),
+    "landing_page_views": ("website landing page views",),
     "add_to_carts": ("adds to cart", "website adds to cart", "add to cart"),
     "checkouts_initiated": ("checkouts initiated", "website checkouts initiated"),
     "attribution_setting": ("attribution setting",),
@@ -63,6 +66,12 @@ ALIASES = {
     "reported_cpc": ("cpc (cost per link click)",),
     "reported_cpm": ("cpm (cost per 1,000 impressions)",),
     "reported_ctr": ("ctr (link click-through rate)",),
+}
+
+# When both are exported, the first header is used for the funnel and the second is
+# only compared with it, so a disagreement is reported rather than dropped.
+PREFERRED_COLUMNS = {
+    "landing_page_views": ("website landing page views", "landing page views"),
 }
 
 SPEND_HEADER = re.compile(r"^(amount spent( \((?P<currency>[a-z]{3})\))?|spend)$")
@@ -114,7 +123,7 @@ def _clean_number(value):
     """Strip symbols and spacing from a cell. Blank gives None."""
     if value is None or pd.isna(value):
         return None
-    text = re.sub(r"[\s€$£%]", "", str(value))
+    text = re.sub(r"[\s€$£₹%]", "", str(value))
     return None if text in ("", "-") else text
 
 
@@ -244,6 +253,11 @@ def _map_columns(raw, result):
 
     for canonical, aliases in ALIASES.items():
         claim(canonical, aliases)
+    for canonical, (preferred, other) in PREFERRED_COLUMNS.items():
+        if preferred not in headers:
+            claim(canonical, [other])
+        elif other in headers:
+            claim(f"{canonical}_compared", [other])
     claim("spend", [name for name in headers if SPEND_HEADER.match(name)])
     for header, canonical in BREAKDOWN_HEADERS.items():
         claim(canonical, [header])
@@ -260,8 +274,7 @@ def _map_columns(raw, result):
     else:
         _map_reporting_dates(raw, headers, mapping, result)
 
-    required = ("campaign", *REQUIRED_MEASURES)
-    missing = [name for name in required if name not in mapping]
+    missing = [name for name in REQUIRED_MEASURES if name not in mapping]
     if "link_clicks" in missing and any(name in headers for name in ALL_CLICKS_HEADERS):
         result.add(
             ERROR,
@@ -302,9 +315,9 @@ def _parse_numeric_column(series, name, decimal, result):
 
 
 def _drop_summary_rows(raw, mapping, result):
-    blank_date = raw[mapping["date"]].str.strip() == ""
-    blank_campaign = raw[mapping["campaign"]].str.strip() == ""
-    summary = blank_date & blank_campaign
+    summary = raw[mapping["date"]].str.strip() == ""
+    if "campaign" in mapping:
+        summary &= raw[mapping["campaign"]].str.strip() == ""
     if summary.any():
         result.add(
             WARNING,
@@ -334,17 +347,27 @@ def _build_frame(raw, mapping, result):
         )
     frame["date"] = dates
 
-    frame["campaign"] = raw[mapping["campaign"]].str.strip()
-    if (frame["campaign"] == "").any():
-        result.add(ERROR, "missing_campaign", "Some rows have no campaign name.")
+    if "campaign" in mapping:
+        frame["campaign"] = raw[mapping["campaign"]].str.strip()
+        if (frame["campaign"] == "").any():
+            result.add(ERROR, "missing_campaign", "Some rows have no campaign name.")
+    else:
+        frame["campaign"] = ACCOUNT_LEVEL_CAMPAIGN
+        result.add(
+            WARNING,
+            "account_level",
+            "The file has no campaign column, so it is analysed as one account-level total labelled "
+            f"{ACCOUNT_LEVEL_CAMPAIGN}. Campaign-level results aren't available.",
+        )
 
     for column in ("ad_set", "ad", "attribution_setting", "currency"):
         if column in mapping:
             frame[column] = raw[mapping[column]].str.strip()
 
+    compared = [f"{name}_compared" for name in PREFERRED_COLUMNS]
     numeric = [
         column
-        for column in (*REQUIRED_MEASURES, *OPTIONAL_STAGES, *REPORTED_CHECKS)
+        for column in (*REQUIRED_MEASURES, *OPTIONAL_STAGES, *REPORTED_CHECKS, *compared)
         if column in mapping
     ]
     decimal = detect_decimal({mapping[c]: raw[mapping[c]] for c in numeric}, result)
@@ -355,7 +378,25 @@ def _build_frame(raw, mapping, result):
         values = _parse_numeric_column(raw[mapping[column]], mapping[column], decimal, result)
         if values is not None:
             frame[column] = values
+
+    for canonical in PREFERRED_COLUMNS:
+        if canonical in frame and f"{canonical}_compared" in frame:
+            _compare_columns(frame, canonical, mapping, result)
     return frame
+
+
+def _compare_columns(frame, canonical, mapping, result):
+    """Report rows where the preferred column and its alternative disagree, then drop the alternative."""
+    used, other = frame[canonical], frame.pop(f"{canonical}_compared")
+    differs = ~((used == other) | (used.isna() & other.isna()))
+    if differs.any():
+        result.add(
+            WARNING,
+            "conflicting_columns",
+            f"{mapping[canonical]} and {mapping[canonical + '_compared']} differ in {int(differs.sum())} "
+            f"row(s), totalling {used.sum():,.0f} and {other.sum():,.0f}. The funnel uses "
+            f"{mapping[canonical]}, because it counts website visits only.",
+        )
 
 
 def _fill_confirmed_blanks(frame, column, blanks, result):

@@ -2,6 +2,7 @@
 
 import json
 from html import escape
+from pathlib import Path
 
 import pytest
 from streamlit.testing.v1 import AppTest
@@ -286,6 +287,20 @@ def test_csv_upload_works_with_ai_off():
 
     assert not app.exception
     assert download_button(app)
+
+
+def test_account_level_inr_export_runs_end_to_end(monkeypatch):
+    built = capture_reports(monkeypatch)
+    fixture = Path(__file__).parent / "fixtures" / "meta_account_level_inr.csv"
+    app = upload(start(), fixture.read_text("utf-8-sig"))
+
+    assert not app.exception and not app.error
+    assert widget(app.selectbox, "Campaign").options == ["All campaigns"]
+    text = page_text(app)
+    assert "₹" in text and "€" not in text
+    assert "account-level total" in text
+    assert download_button(app)
+    assert "₹" in built[-1] and "€" not in built[-1]
 
 
 def test_dashboard_warns_about_recommendations_on_withheld_hypotheses(monkeypatch):

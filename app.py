@@ -13,7 +13,7 @@ from funnel_magnet.ai.evidence import build_evidence
 from funnel_magnet.ai.providers import AIError
 from funnel_magnet.diagnose import DEFAULT_MATERIALITY_THRESHOLD, run_diagnosis
 from funnel_magnet.periods import MONTHLY, WEEKLY, list_complete_periods
-from funnel_magnet.sources.meta import load_meta_csv
+from funnel_magnet.sources.meta import ACCOUNT_LEVEL_CAMPAIGN, load_meta_csv
 from funnel_magnet.ui import charts, render, report, view
 
 SAMPLE_SOURCE = "Sample scenario"
@@ -89,9 +89,11 @@ def select_comparison(data, source_name):
         format_func=period_text,
         key=f"current-{source_name}-{granularity}",
     )
+    # An account-level export has only the synthetic label, so there is nothing to split.
+    campaigns = sorted(set(data["campaign"]) - {ACCOUNT_LEVEL_CAMPAIGN})
     campaign = st.sidebar.selectbox(
         "Campaign",
-        [ALL_CAMPAIGNS, *sorted(data["campaign"].unique())],
+        [ALL_CAMPAIGNS, *campaigns],
         key=f"campaign-{source_name}",
     )
     threshold = st.sidebar.number_input(
