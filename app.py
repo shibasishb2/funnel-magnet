@@ -1,14 +1,13 @@
 """Streamlit entry point for the Funnel Magnet diagnostic prototype."""
 
 import io
-import time
 from datetime import date
 
 import pandas as pd
 import streamlit as st
 from streamlit.errors import StreamlitSecretNotFoundError
 
-from funnel_magnet import __version__, access, playbook
+from funnel_magnet import __version__, playbook
 from funnel_magnet.ai import prioritise, service
 from funnel_magnet.ai.evidence import build_evidence
 from funnel_magnet.ai.providers import AIError
@@ -318,53 +317,11 @@ def show_dashboard(result, diagnosis, source_name, settings):
         )
 
 
-def sign_out():
-    st.session_state.clear()
-
-
-def require_sign_in():
-    """Stop the page unless this visitor may use the app. Return True when signed in."""
-    secrets = read_secrets()
-    if not access.required(secrets, service.load_settings(secrets).shared_deployment):
-        return False
-    password = access.configured_password(secrets)
-    if password is None:
-        # A shared deployment never opens without a usable password.
-        st.error(access.NOT_CONFIGURED_MESSAGE)
-        st.stop()
-    if st.session_state.get("signed_in"):
-        st.sidebar.button("Sign out", on_click=sign_out, key="sign-out")
-        return True
-
-    st.subheader("Tester sign-in")
-    st.write(
-        "This demonstration is open to authorised testers only. Use synthetic or anonymized "
-        "advertising data. This is prototype access control, not production user authentication."
-    )
-    attempts = st.session_state.get("sign_in_attempts", 0)
-    if attempts >= access.MAX_ATTEMPTS:
-        st.error("Too many incorrect attempts in this session. Close this tab and try again later.")
-        st.stop()
-    with st.form("sign-in"):
-        candidate = st.text_input("Tester password", type="password")
-        submitted = st.form_submit_button("Sign in", type="primary")
-    if submitted:
-        if access.password_matches(candidate, password):
-            st.session_state["signed_in"] = True
-            st.rerun()
-        st.session_state["sign_in_attempts"] = attempts + 1
-        # A short pause slows repeated guessing.
-        time.sleep(1)
-        st.error("That password isn't right.")
-    st.stop()
-
-
 def main():
     st.set_page_config(page_title="Funnel Magnet", layout="wide")
     st.html(render.style_tag())
     st.html(render.header_html())
     st.info(view.DECISION_SUPPORT_NOTICE)
-    require_sign_in()
 
     selected = select_source()
     st.sidebar.header("Data settings")

@@ -2,7 +2,7 @@
 
 AI Marketing Performance Diagnostic Agent: an ESCP MBA prototype that diagnoses changes in Meta Ads performance.
 
-**Status:** Stages 0 to 4 are complete, and the app is set up as a controlled demonstration for authorised testers on Streamlit Community Cloud. Python finds the problem KPIs, and a marketing playbook supplies possible causes, checks and conditional actions. An optional AI step only orders and explains them, and AI is off by default.
+**Status:** Stages 0 to 4 are complete, and the app runs as a public demonstration on Streamlit Community Cloud. Python finds the problem KPIs, and a marketing playbook supplies possible causes, checks and conditional actions. An optional AI step only orders and explains them, and AI is off by default.
 
 Use synthetic or anonymized data only. The upload panel says so before any file is chosen, and AI prioritisation sends Groq only totals and playbook text, never rows, campaign names or file names. Groq stores data in the United States, so client or personal data must not be uploaded to the demonstration.
 
@@ -58,35 +58,21 @@ python -m venv "$env:USERPROFILE\.venvs\funnel-magnet"
 
 Uploads are limited to 20 MB. Community Cloud apps can sleep when unused, so open the link shortly before a demonstration.
 
-### Secrets for the tester demonstration
+### Secrets for the public demonstration
 
-In Streamlit Community Cloud, open the app's **Settings**, then **Secrets**, and paste this with your own values:
+In Streamlit Community Cloud, open the app's **Settings**, then **Secrets**, and paste this with your own key:
 
 ```toml
 FM_SHARED_DEPLOYMENT = "true"
-FM_ACCESS_PASSWORD = "a long random password for testers"
 FM_AI_ENABLED = "true"
 AI_PROVIDER = "groq"
 GROQ_API_KEY = "your Groq key"
 GROQ_MODEL = "openai/gpt-oss-120b"
 ```
 
-Save, and the app restarts with them. Never add a key or password to a file in the repository. Share the password with testers outside the app, and change it in Secrets to revoke access.
-
-`FM_SHARED_DEPLOYMENT = "true"` keeps the app closed until `FM_ACCESS_PASSWORD` holds at least 12 characters. Groq is available in a shared deployment only behind that sign-in. Without the AI settings, signed-in testers still get the full diagnosis and report.
+Save, and the app restarts with them. Never add a key to a file in the repository. The app is public, with no sign-in: anyone with the link can upload a file, see the diagnosis and use the shared AI allowance below. Without the AI settings, the full diagnosis and report still work.
 
 Use a Groq key from the free plan. The app has no setting that can buy paid usage, and the limits below are not a billing cap, so don't attach a payment method to the Groq organisation used for the demonstration.
-
-## Tester access
-
-A shared deployment shows only a sign-in form until a tester enters the shared password. Until then no data, diagnosis, upload, report or AI control is reachable. **Sign out** in the sidebar ends the session.
-
-This is prototype access control, not production user authentication:
-
-- One password is shared by every tester. There are no individual accounts and no audit of who used the app.
-- The password is compared in constant time. Five wrong attempts lock that browser session, and a one-second pause slows each wrong attempt. Opening a new tab starts a new session, so a long random password is the real protection.
-- Sign-in lasts for one browser session. Reloading the page signs the tester out.
-- Streamlit Community Cloud serves the app over HTTPS. The password is never shown, logged, or written to the report.
 
 ## Dashboard
 
@@ -154,7 +140,7 @@ Groq is the provider tested with prioritisation, using `openai/gpt-oss-120b`.
 
 Groq requests use strict structured output, low reasoning effort and at most 3,000 completion tokens. A rate-limited request is not retried, and the message gives Groq's suggested wait. Groq checks the reply format after generating, so it can refuse a reply. The app then reads the refused reply and applies every usual check.
 
-In a shared deployment, Groq is available only behind the tester sign-in described above.
+Groq works in the public deployment within the shared limits above.
 
 ### Gemini
 
@@ -171,8 +157,7 @@ Google's Gemini API terms require paid use for an app made available to users in
 | `GEMINI_API_KEY` | None | Server-side Gemini key |
 | `GEMINI_MODEL` | `gemini-3.1-flash-lite` | Gemini model name |
 | `GEMINI_TIER` | `free` | Set to `paid` once the Google project has billing enabled |
-| `FM_SHARED_DEPLOYMENT` | `false` | Set to `true` for a shared app. It then needs a tester password, Groq works only behind it, and Gemini needs `GEMINI_TIER = "paid"`. |
-| `FM_ACCESS_PASSWORD` | None | Shared tester password, at least 12 characters. Setting it turns on the sign-in. |
+| `FM_SHARED_DEPLOYMENT` | `false` | Set to `true` for a shared app. Gemini then needs `GEMINI_TIER = "paid"`. |
 
 Never commit a key or share it in chat. To add a provider, add a class with `generate()` to `funnel_magnet/ai/providers.py` and return it from `create_provider()` in `funnel_magnet/ai/service.py`.
 

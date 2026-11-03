@@ -56,7 +56,7 @@ def no_live_calls(monkeypatch):
         raise AssertionError("A test tried to create a real provider.")
 
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-    for name in ("FM_ACCESS_PASSWORD", "FM_SHARED_DEPLOYMENT", "FM_AI_ENABLED", "AI_PROVIDER", "GROQ_API_KEY"):
+    for name in ("FM_SHARED_DEPLOYMENT", "FM_AI_ENABLED", "AI_PROVIDER", "GROQ_API_KEY"):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setattr(service, "create_provider", blocked)
     # The usage limit is shared by every session, so each test starts with a fresh, roomy one.
@@ -355,7 +355,7 @@ def test_groq_can_be_chosen_as_the_provider(monkeypatch):
     app.secrets["GROQ_API_KEY"] = "gsk_test_only"
     app.run()
 
-    assert any("for authorised testers" in item.value for item in app.caption)
+    assert any("Groq free plan" in item.value for item in app.caption)
     generate_button(app).click()
     app.run()
 

@@ -193,7 +193,7 @@ def test_network_failures_give_clear_messages(error, message):
 def clean_environment(monkeypatch):
     for name in (
         "AI_PROVIDER", "GROQ_API_KEY", "GROQ_MODEL", "GEMINI_API_KEY", "GEMINI_MODEL",
-        "GEMINI_TIER", "FM_SHARED_DEPLOYMENT", "FM_AI_ENABLED", "FM_ACCESS_PASSWORD",
+        "GEMINI_TIER", "FM_SHARED_DEPLOYMENT", "FM_AI_ENABLED",
     ):
         monkeypatch.delenv(name, raising=False)
     return monkeypatch
@@ -238,18 +238,11 @@ def test_groq_stays_off_until_ai_is_enabled(clean_environment):
     assert settings.unavailable_reason == service.AI_OFF_MESSAGE
 
 
-def test_groq_is_blocked_in_a_shared_deployment(clean_environment):
+def test_groq_works_in_a_public_shared_deployment(clean_environment):
     settings = service.load_settings({**ENABLED_GROQ, "GROQ_API_KEY": FAKE_KEY, "FM_SHARED_DEPLOYMENT": "true"})
 
-    assert settings.unavailable_reason == service.SHARED_GROQ_MESSAGE
-
-
-def test_groq_is_allowed_in_a_shared_deployment_only_behind_sign_in(clean_environment):
-    shared = {**ENABLED_GROQ, "GROQ_API_KEY": FAKE_KEY, "FM_SHARED_DEPLOYMENT": "true"}
-
-    assert service.load_settings({**shared, "FM_ACCESS_PASSWORD": "long-enough-test-pass"}).unavailable_reason is None
-    # A password too short to count leaves the gate shut.
-    assert service.load_settings({**shared, "FM_ACCESS_PASSWORD": "short"}).unavailable_reason == service.SHARED_GROQ_MESSAGE
+    assert settings.unavailable_reason is None
+    assert "Groq free plan" in settings.usage_note
 
 
 def test_free_tier_limits_are_three_per_session_one_a_minute_and_25_a_day():

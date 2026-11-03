@@ -3,7 +3,6 @@
 import os
 from dataclasses import dataclass
 
-from funnel_magnet import access
 from funnel_magnet.ai.providers import AIError, GeminiProvider, GroqProvider
 
 GEMINI = "gemini"
@@ -29,16 +28,12 @@ NO_KEY_MESSAGE = (
 UNKNOWN_PROVIDER_MESSAGE = (
     "AI analysis is unavailable because AI_PROVIDER isn't recognised. Use gemini or groq."
 )
-SHARED_GROQ_MESSAGE = (
-    "AI analysis is off because this shared deployment has no tester sign-in. "
-    "Groq is only available to signed-in testers."
-)
 GEMINI_FREE_TIER_NOTE = (
     "Free tier: for local development only. Apps available to users in the EEA, "
     "Switzerland or the UK need paid Gemini use."
 )
 GROQ_NOTE = (
-    "Groq free plan, for authorised testers of this demonstration. Use synthetic or anonymized data only."
+    "Groq free plan, shared by every visitor of this demonstration. Use synthetic or anonymized data only."
 )
 SHARED_FREE_TIER_MESSAGE = (
     "AI analysis is off because this shared deployment isn't set to the paid tier. "
@@ -54,7 +49,6 @@ class AISettings:
     shared_deployment: bool
     enabled: bool = False
     provider: str = GEMINI
-    access_protected: bool = False
 
     @property
     def unavailable_reason(self):
@@ -65,9 +59,6 @@ class AISettings:
             return UNKNOWN_PROVIDER_MESSAGE
         if not self.api_key:
             return NO_KEY_MESSAGE
-        # A shared deployment may use Groq only behind the tester sign-in.
-        if self.shared_deployment and self.provider == GROQ and not self.access_protected:
-            return SHARED_GROQ_MESSAGE
         if self.shared_deployment and self.provider == GEMINI and self.tier != PAID_TIER:
             return SHARED_FREE_TIER_MESSAGE
         return None
@@ -96,7 +87,6 @@ def load_settings(secrets=None):
         shared_deployment=read("FM_SHARED_DEPLOYMENT", "false").lower() == "true",
         enabled=read("FM_AI_ENABLED", "false").lower() == "true",
         provider=provider,
-        access_protected=access.configured_password(secrets) is not None,
     )
 
 
