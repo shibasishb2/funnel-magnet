@@ -5,3 +5,6 @@ data/samples/*.csv text eol=lf
 data/samples/*.json text eol=lf
 
 *.bat text eol=crlf
+
+# Upload fixtures keep the exact bytes of a real export, including CRLF line endings.
+tests/fixtures/*.csv -text

@@ -5,6 +5,7 @@ from html import escape
 from pathlib import Path
 
 import pytest
+import streamlit as st
 from streamlit.testing.v1 import AppTest
 
 from funnel_magnet.ai import service
@@ -13,6 +14,8 @@ from funnel_magnet.ai.providers import AIRequestError, ProviderResponse
 from funnel_magnet.diagnose import run_diagnosis
 from funnel_magnet.periods import WEEKLY
 from funnel_magnet.sources.meta import load_meta_csv
+from funnel_magnet import version
+from funnel_magnet.sources import meta
 from funnel_magnet.ui import report, view
 
 SAMPLE_NAMES = [sample.name for sample in view.load_samples()]
@@ -301,6 +304,59 @@ def test_account_level_inr_export_runs_end_to_end(monkeypatch):
     assert "account-level total" in text
     assert download_button(app)
     assert "₹" in built[-1] and "€" not in built[-1]
+
+
+ACCOUNT_EXPORT = Path(__file__).parent / "fixtures" / "meta_account_level_inr.csv"
+BOM = bytes([0xEF, 0xBB, 0xBF])
+CRLF = bytes([13, 10])
+
+
+def upload_bytes(app, data, name="export.csv"):
+    """Upload exact file bytes through the sidebar widget, as a visitor's browser does."""
+    widget(app.radio, "Data source").set_value("Upload CSV")
+    app.run()
+    widget(app.file_uploader, "Meta Ads daily export").upload(name, data, "text/csv")
+    return app.run()
+
+
+def rejecting_importer(source, blank_actions_as_zero=False):
+    """Stands in for the importer before account-level support."""
+    result = meta.LoadResult()
+    result.add(meta.ERROR, "missing_columns", "Required columns are missing: campaign.")
+    return result
+
+
+def test_exact_export_bytes_load_through_the_upload_widget():
+    st.cache_data.clear()
+    data = ACCOUNT_EXPORT.read_bytes()
+    assert data.startswith(BOM) and CRLF in data
+
+    app = upload_bytes(start(), data)
+
+    assert not app.exception and not app.error
+    assert "account-level total" in page_text(app)
+    assert widget(app.selectbox, "Campaign").options == ["All campaigns"]
+
+
+def test_an_upload_rejected_by_older_code_is_read_again_after_an_update(monkeypatch):
+    st.cache_data.clear()
+    data = ACCOUNT_EXPORT.read_bytes()
+    real_importer = meta.load_meta_csv
+    monkeypatch.setattr(meta, "load_meta_csv", rejecting_importer)
+    monkeypatch.setattr(version, "code_version", lambda: "before-update")
+
+    before = upload_bytes(start(), data)
+    assert any("missing: campaign" in item.value for item in before.error)
+
+    # The update replaces the importer while the server, and its cache, keep running.
+    monkeypatch.setattr(meta, "load_meta_csv", real_importer)
+    same_version = upload_bytes(start(), data)
+    assert any("missing: campaign" in item.value for item in same_version.error)
+
+    monkeypatch.setattr(version, "code_version", lambda: "after-update")
+    after = upload_bytes(start(), data)
+    assert not after.exception and not after.error
+    assert "account-level total" in page_text(after)
 
 
 def test_dashboard_warns_about_recommendations_on_withheld_hypotheses(monkeypatch):

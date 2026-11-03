@@ -15,6 +15,7 @@ from funnel_magnet.diagnose import DEFAULT_MATERIALITY_THRESHOLD, run_diagnosis
 from funnel_magnet.periods import MONTHLY, WEEKLY, list_complete_periods
 from funnel_magnet.sources.meta import ACCOUNT_LEVEL_CAMPAIGN, load_meta_csv
 from funnel_magnet.ui import charts, render, report, view
+from funnel_magnet.version import code_version
 
 SAMPLE_SOURCE = "Sample scenario"
 UPLOAD_SOURCE = "Upload CSV"
@@ -22,9 +23,11 @@ ALL_CAMPAIGNS = "All campaigns"
 GRANULARITIES = {"Weekly": WEEKLY, "Monthly": MONTHLY}
 
 
-# The cache is shared by every visitor, so keep it small on a public server.
+# The cache is shared by every visitor, so keep it small on a public server. It is keyed
+# by the running code too, because an update can arrive without a restart, and an
+# upload rejected by older code must then be read again.
 @st.cache_data(show_spinner=False, max_entries=20)
-def load_data(raw, blank_actions_as_zero):
+def load_data(raw, blank_actions_as_zero, running_code):
     return load_meta_csv(io.BytesIO(raw), blank_actions_as_zero=blank_actions_as_zero)
 
 
@@ -301,7 +304,7 @@ def main():
         st.info("Upload a Meta Ads daily export in the sidebar, or choose a sample scenario.")
     else:
         source_name, raw = selected
-        result = load_data(raw, blanks_are_zero)
+        result = load_data(raw, blanks_are_zero, code_version())
         if not result.ok:
             show_load_errors(result)
         else:
