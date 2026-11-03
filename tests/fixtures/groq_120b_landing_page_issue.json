@@ -1,0 +1,63 @@
+{
+  "hypotheses": [
+    {
+      "rank": 1,
+      "diagnostic_node": "link_clicks_to_landing_page_views",
+      "mathematical_evidence": "Link clicks → Landing page views contributed -0.73 to ROAS (85% of all movement, adverse contributor).",
+      "unverified_business_cause": "Landing page performance issues may have contributed to the lower link clicks → landing page views rate.",
+      "evidence_ids": ["D1", "M8"],
+      "confidence": "low",
+      "uncertainty": "The exact reason for the drop is not known; it could be technical or relevance related."
+    },
+    {
+      "rank": 2,
+      "diagnostic_node": "checkouts_initiated_to_purchases",
+      "mathematical_evidence": "Checkout → Purchase contributed +0.05 to ROAS (6% of all movement, negligible).",
+      "unverified_business_cause": "Recent checkout flow improvements may have contributed to the slight increase in the checkout → purchase conversion rate.",
+      "evidence_ids": ["D2", "M11"],
+      "confidence": "low",
+      "uncertainty": "The improvement is small and may be incidental; further data is needed to confirm a causal link."
+    }
+  ],
+  "recommendations": [
+    {
+      "priority": 1,
+      "hypothesis_rank": 1,
+      "investigation": "Review landing page performance metrics for the current period.",
+      "what_to_check": "Page load time, server response time, and any recent page redesigns; a slowdown would support the hypothesis.",
+      "target_metric": "link_clicks_to_landing_page_views",
+      "expected_direction": "increase",
+      "expected_impact": "If page performance degraded, fixing it should raise the link clicks → landing page views rate and improve ROAS.",
+      "if_supported": "Prioritize fixing page speed or revert recent changes, then monitor the metric.",
+      "if_not_supported": "Investigate other factors such as audience relevance or ad creative alignment.",
+      "check_source": "uploaded_data",
+      "evidence_ids": ["G1"]
+    },
+    {
+      "priority": 2,
+      "hypothesis_rank": 2,
+      "investigation": "Examine recent changes to the checkout process.",
+      "what_to_check": "Implementation of new checkout steps, payment options, or UI tweaks; a positive change would explain the higher checkout → purchase rate.",
+      "target_metric": "checkouts_initiated_to_purchases",
+      "expected_direction": "increase",
+      "expected_impact": "Confirming a beneficial change can guide replication across campaigns.",
+      "if_supported": "Document the effective change and apply it to other funnels.",
+      "if_not_supported": "Look for external factors (e.g., promotions) that might have driven the slight uplift.",
+      "check_source": "uploaded_data",
+      "evidence_ids": []
+    }
+  ],
+  "additional_information": [
+    {
+      "information": "Detailed page speed logs and timestamps of any landing page redesigns.",
+      "reason": "To test whether technical performance caused the drop in link clicks → landing page views.",
+      "evidence_ids": []
+    },
+    {
+      "information": "Change log of checkout flow modifications and associated A/B test results.",
+      "reason": "To verify if recent checkout improvements are responsible for the modest positive contribution.",
+      "evidence_ids": []
+    }
+  ],
+  "confidence_explanation": "Both hypotheses rely on low‑level metrics that moved materially (link clicks → landing page views) or showed a small positive shift (checkout → purchase). Because the evidence does not directly identify a business cause, confidence remains low."
+}

@@ -97,6 +97,28 @@ You can set these as environment variables instead. Never commit a key or share 
 | `GEMINI_TIER` | `free` | Set to `paid` once the Google project has billing enabled |
 | `FM_SHARED_DEPLOYMENT` | `false` | Set to `true` for a shared app. AI analysis then stays off until `GEMINI_TIER` is `paid`. |
 
+### Use Groq instead
+
+Groq is an optional alternative provider, using `openai/gpt-oss-120b` by default. It receives the same evidence, and its replies go through the same normalizer and validator. In live tests the 20B model broke the response format in about one reply in three.
+
+1. Create a key in GroqCloud.
+2. Store it as a Windows user environment variable named `GROQ_API_KEY`: open **Edit environment variables for your account**, add the variable, then restart the app. This keeps the key out of synced folders and shell history. Alternatively, add it to `.streamlit/secrets.toml`, which Git ignores.
+3. Add `AI_PROVIDER = "groq"` and `FM_AI_ENABLED = "true"` to `.streamlit/secrets.toml`.
+
+| Setting | Default | Purpose |
+|---|---|---|
+| `AI_PROVIDER` | `gemini` | `gemini` or `groq` |
+| `GROQ_API_KEY` | None | Server-side Groq key |
+| `GROQ_MODEL` | `openai/gpt-oss-120b` | Groq model name |
+
+Groq requests use strict structured output, low reasoning effort and at most 3,000 completion tokens. Groq counts requested tokens against its per-minute limit, which is 8,000 tokens on the free plan, so roughly one diagnosis a minute fits. A rate-limited request is not retried, and the message gives Groq's suggested wait.
+
+The schema sent with each request lists the only allowed values: `diagnostic_node` must be a node on a diagnostic path, and `target_metric` a metric in the evidence, both by internal name. A check of page load time therefore targets `link_clicks_to_landing_page_views`. Groq checks these rules after generating rather than enforcing them, so it can refuse a reply. The app then reads the refused reply and applies every usual check, so off-path or invented content is withheld, never shown. A missing `target_metric` is filled only when the recommendation's own evidence names exactly one metric, and the fill is listed under "Adjusted by the app".
+
+A check labelled as using the uploaded data is relabelled as external when it needs data a Meta export doesn't have, such as page load times, redesign records, checkout logs or order-level data. Only genuine repeats of the app's own two-period comparison are withheld.
+
+Groq stays off in a shared deployment until its terms and limits have been reviewed.
+
 ### Free and paid use
 
 Google's Gemini API terms require paid use for an app made available to users in the EEA, Switzerland or the UK. Use the free tier for local development only. Before sharing the app with those users, enable billing on the Google project and set `GEMINI_TIER = "paid"` and `FM_SHARED_DEPLOYMENT = "true"`. These settings don't check billing, so confirm it in Google's console.

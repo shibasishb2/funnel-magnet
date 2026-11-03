@@ -41,13 +41,27 @@ Rules:
 6. Anything in checks_available_in_uploaded_data is available. Never describe it as
    missing. Say it has not been checked yet.
 
+Coverage:
+Address the main driver, the largest driver moving with ROAS, and the largest
+offsetting driver, each with a hypothesis or a recommendation. Each driver fact's
+effect_on_roas says which is which.
+
 Hypotheses:
 Return up to three hypotheses, ranked 1 upward, most important first, where the
-evidence supports them. Each hypothesis contains exactly one business cause. Give
-each separate cause its own hypothesis, and never join two causes with "or". For
-example, campaign mix and market competition are two hypotheses. Consider any
-campaign-mix warning. For diagnostic_node use the metric name exactly as in the
-evidence, such as "cpm".
+evidence supports them. Each hypothesis contains exactly one business cause that a
+person could test. Several hypotheses may share the same diagnostic_node.
+- Valid: "Creative fatigue may have contributed to lower CTR."
+- Valid, as a separate hypothesis: "Audience saturation may have contributed to
+  lower CTR."
+- Invalid, two causes in one: "Creative fatigue or audience saturation may have
+  contributed to lower CTR."
+- Invalid, arithmetic only: "ROAS may have fallen because CPA rose." The evidence
+  already shows that. Name a business cause outside the metrics.
+Consider any campaign-mix warning. For diagnostic_node use the metric name exactly
+as in the evidence, such as "cpm".
+Put the uncertainty before the cause: "AOV may have risen because of a product mix
+shift", never "AOV rose due to a product mix shift, which may...". Never call a
+metric or funnel stage the root cause.
 
 Recommendations:
 Each recommendation is one concrete investigation for a person to review, never
@@ -59,14 +73,27 @@ priority 1.
 - if_supported and if_not_supported: a concrete action for each result, naming what
   to change or check next. Avoid vague phrases such as "focus optimization efforts"
   or "adjust bidding strategies". These steps may lead to an external check.
-- check_source: "uploaded_data" when investigation and what_to_check need only the
-  data already uploaded, listed in checks_available_in_uploaded_data. Otherwise use
-  "external_data".
+- check_source: "uploaded_data" only for a check listed in
+  checks_available_in_uploaded_data. Otherwise use "external_data".
+- Never recommend comparing a metric between the two periods. The evidence already
+  shows that comparison. Prefer checks that gather new evidence.
 - List every uploaded_data check before any external_data check.
 - Name any outside data a recommendation mentions in additional_information, such
   as frequency, placement, audience, competitor, seasonality, benchmark or industry
   data.
-- For target_metric use a metric name exactly as in the evidence.
+
+Additional information:
+List only evidence that is missing from the upload and would test a hypothesis,
+such as "Frequency and creative launch dates." Never repeat a metric, driver or data
+warning that is already in the evidence.
+
+Confidence explanation:
+Describe the confidence the hypotheses actually have. Never call it medium unless a
+hypothesis is medium.
+- Every recommendation must include target_metric: the internal name of the metric
+  in the evidence that the check helps explain. A check of page load time targets
+  link_clicks_to_landing_page_views. Never put an outside measure, such as page load
+  time or creative frequency, in target_metric.
 - Use expected_direction "unclear" when a check does not change the metric by itself.
 """
 

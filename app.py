@@ -177,7 +177,7 @@ def request_ai_diagnosis(evidence, settings, key):
 def show_ai_diagnosis(evidence, assessable):
     st.subheader("AI diagnosis")
     settings = service.load_settings(read_secrets())
-    key = f"{settings.model}:{evidence.fingerprint()}"
+    key = f"{settings.provider}:{settings.model}:{evidence.fingerprint()}"
     results = st.session_state.get("ai_results", {})
 
     unavailable = settings.unavailable_reason
@@ -194,11 +194,8 @@ def show_ai_diagnosis(evidence, assessable):
         "Sends only the aggregated evidence below. Raw rows and campaign names are never sent, "
         "and nothing changes in your ad account."
     )
-    if not settings.unavailable_reason and settings.tier != service.PAID_TIER:
-        st.caption(
-            "Free tier: for local development only. Apps available to users in the EEA, "
-            "Switzerland or the UK need paid Gemini use."
-        )
+    if not settings.unavailable_reason and settings.usage_note:
+        st.caption(settings.usage_note)
 
     if clicked and key not in results:
         request_ai_diagnosis(evidence, settings, key)

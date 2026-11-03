@@ -31,10 +31,31 @@ UNAVAILABLE_DATA = {
     "Session data": r"\bsessions?\b",
     "Benchmark data": r"\bbenchmarks?\b",
     "Industry data": r"\bindustry\b",
+    # Website and order records. A Meta Ads export has none of these.
+    "Site performance data": (
+        r"\b(?:page load(?: times?)?|load times?|server response(?: times?)?|site speed|core web vitals)\b"
+    ),
+    "Website change records": (
+        r"\b(?:redesigns?|design changes?|page changes?|content changes?|change ?logs?|ui (?:changes?|tweaks?))\b"
+    ),
+    "Checkout and payment records": (
+        r"\b(?:checkout (?:logs?|errors?|steps?|flow)|funnel logs?|payment (?:errors?|failures?|logs?|options?|gateway)"
+        r"|abandonment reasons?|drop[- ]off reasons?|error rates?|form errors?)\b"
+    ),
+    "Order-level data": r"\b(?:order[- ]level|product (?:mix|categor\w*|skus?)|items per order|discount(?:s| tiers?)?)\b",
 }
 
 
+# Models often write "ad‑level" with a non-breaking hyphen, which plain patterns miss.
+HYPHENS = str.maketrans({char: "-" for char in "\u2010\u2011\u2012\u2013\u2014\u2212"})
+
+
+def plain_hyphens(text):
+    return text.translate(HYPHENS)
+
+
 def _data_named_in(text):
+    text = plain_hyphens(text)
     return [
         (name, pattern)
         for name, pattern in UNAVAILABLE_DATA.items()
@@ -117,13 +138,54 @@ def _disclose_data_needs(result, recommendations, notes):
                 needs.append(
                     InformationNeed(
                         information=f"{name}.",
-                        reason=f'Needed for this check: "{item.investigation}"',
+                        # Quoting the check would make the app's own disclosure look like
+                        # a claim to the validator, and a number would fail its number check.
+                        reason="Needed for a recommended check that uses outside data.",
                         evidence_ids=item.evidence_ids,
                     )
                 )
                 listed += f" {name}"
                 notes.append(f"Added {name.lower()} to the additional information needed.")
     return needs
+
+
+def recover_target_metrics(reply, evidence):
+    """Fill a recommendation's missing target_metric only from its own cited evidence.
+
+    It is filled when the cited metric and driver facts name exactly one metric, and
+    that metric matches the linked hypothesis's node if there is one. Otherwise the
+    recommendation is removed and reported, because guessing would invent a claim.
+    Returns (reply, notes, issues).
+    """
+    notes, issues = [], []
+    if not isinstance(reply, dict) or not isinstance(reply.get("recommendations"), list):
+        return reply, notes, issues
+
+    nodes = {
+        item.get("rank"): item.get("diagnostic_node")
+        for item in reply.get("hypotheses") or []
+        if isinstance(item, dict)
+    }
+    kept = []
+    for item in reply["recommendations"]:
+        if not isinstance(item, dict) or item.get("target_metric"):
+            kept.append(item)
+            continue
+        cited = {
+            evidence.by_id[fact_id].metric
+            for fact_id in item.get("evidence_ids") or []
+            if fact_id in evidence.by_id
+            and evidence.by_id[fact_id].kind in ("metric", "mathematical_driver")
+        }
+        node = nodes.get(item.get("hypothesis_rank"))
+        label = f"recommendation {item.get('priority', len(kept) + 1)}"
+        if len(cited) == 1 and node in (None, *cited):
+            metric = cited.pop()
+            kept.append({**item, "target_metric": metric})
+            notes.append(f"Filled the missing target metric of {label} with {metric}, the only metric it cites.")
+        else:
+            issues.append(f"{label.capitalize()} had no target metric, and its evidence doesn't identify one.")
+    return {**reply, "recommendations": kept}, notes, issues
 
 
 def normalize_diagnosis(result, evidence):

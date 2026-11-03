@@ -1,0 +1,63 @@
+{
+  "hypotheses": [
+    {
+      "rank": 1,
+      "diagnostic_node": "checkouts_initiated_to_purchases",
+      "mathematical_evidence": "Checkout → Purchase contributed -0.67 to ROAS (91% of all movement, adverse contributor).",
+      "unverified_business_cause": "Checkout process issues may have contributed to lower checkout‑to‑purchase conversion.",
+      "evidence_ids": ["D1", "M11"],
+      "confidence": "low",
+      "uncertainty": "The exact friction point in the checkout funnel is not identified in the uploaded data."
+    },
+    {
+      "rank": 2,
+      "diagnostic_node": "ctr",
+      "mathematical_evidence": "CTR contributed +0.04 to ROAS (5% of all movement, negligible).",
+      "unverified_business_cause": "Improved ad relevance may have contributed to higher CTR.",
+      "evidence_ids": ["D2", "M7"],
+      "confidence": "low",
+      "uncertainty": "The cause of the CTR lift cannot be confirmed without creative performance data."
+    }
+  ],
+  "recommendations": [
+    {
+      "priority": 1,
+      "hypothesis_rank": 1,
+      "investigation": "Review checkout funnel logs for drop‑off reasons.",
+      "what_to_check": "Compare checkout abandonment reasons (e.g., payment errors, shipping options) between periods.",
+      "target_metric": "checkouts_initiated_to_purchases",
+      "expected_direction": "increase",
+      "expected_impact": "If a specific friction is identified, fixing it should improve the checkout‑to‑purchase rate and lift ROAS.",
+      "if_supported": "Implement fixes for the identified friction (e.g., add payment method, simplify form) and monitor the conversion rate.",
+      "if_not_supported": "Proceed to examine audience or campaign mix effects on the checkout stage.",
+      "check_source": "uploaded_data",
+      "evidence_ids": ["G1"]
+    },
+    {
+      "priority": 2,
+      "hypothesis_rank": 2,
+      "investigation": "Analyze recent creative assets for relevance and frequency.",
+      "what_to_check": "Assess creative fatigue indicators such as frequency caps and engagement decay.",
+      "target_metric": "ctr",
+      "expected_direction": "increase",
+      "expected_impact": "If creative relevance is confirmed, maintaining or refreshing assets should sustain the CTR lift.",
+      "if_supported": "Refresh or rotate creatives that show fatigue signs and track CTR changes.",
+      "if_not_supported": "Check audience targeting changes or placement shifts as alternative explanations.",
+      "check_source": "uploaded_data",
+      "evidence_ids": ["W2"]
+    }
+  ],
+  "additional_information": [
+    {
+      "information": "Detailed checkout step‑by‑step abandonment reasons (payment failures, shipping options, form errors).",
+      "reason": "Needed to test hypothesis 1 about checkout friction.",
+      "evidence_ids": ["G1"]
+    },
+    {
+      "information": "Creative frequency, launch dates, and performance decay metrics.",
+      "reason": "Needed to test hypothesis 2 about creative relevance and fatigue.",
+      "evidence_ids": ["W2"]
+    }
+  ],
+  "confidence_explanation": "Both hypotheses rely on high‑level metric changes without direct evidence of the underlying business actions, so confidence remains low. No lower‑level metric shows a material material change that would raise confidence to medium."
+}

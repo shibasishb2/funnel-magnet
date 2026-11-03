@@ -96,7 +96,7 @@ def good_reply():
                     "rank": 1,
                     "diagnostic_node": "cpm",
                     "mathematical_evidence": "CPM rose and accounts for most of the movement.",
-                    "unverified_business_cause": "Delivery costs may have risen.",
+                    "unverified_business_cause": "Auction competition may have raised delivery costs.",
                     "evidence_ids": [cpm],
                     "confidence": "low",
                     "uncertainty": "The data shows the change only.",
@@ -193,14 +193,14 @@ def test_button_shows_the_validated_diagnosis_once(monkeypatch):
     assert provider.calls == 1
     text = page_text(app)
     assert "AI-generated recommendations" in text
-    assert "Delivery costs may have risen." in text
+    assert "Auction competition may have raised delivery costs." in text
 
     app.run()
     generate_button(app).click()
     app.run()
 
     assert provider.calls == 1
-    assert "Delivery costs may have risen." in page_text(app)
+    assert "Auction competition may have raised delivery costs." in page_text(app)
 
 
 def test_changing_the_comparison_hides_the_old_diagnosis(monkeypatch):
@@ -208,12 +208,12 @@ def test_changing_the_comparison_hides_the_old_diagnosis(monkeypatch):
     generate_button(app).click()
     app.run()
 
-    assert "Delivery costs may have risen." in page_text(app)
+    assert "Auction competition may have raised delivery costs." in page_text(app)
 
     widget(app.radio, "Period").set_value("Monthly")
     app.run()
 
-    assert "Delivery costs may have risen." not in page_text(app)
+    assert "Auction competition may have raised delivery costs." not in page_text(app)
 
 
 def test_failed_request_keeps_the_dashboard_working(monkeypatch):
@@ -238,7 +238,7 @@ def test_rejected_reply_is_not_displayed(monkeypatch):
     app.run()
 
     assert any("failed the evidence checks" in item.value for item in app.error)
-    assert "Delivery costs may have risen." not in page_text(app)
+    assert "Auction competition may have raised delivery costs." not in page_text(app)
     assert any("M99" in item.value for item in app.caption)
 
 
@@ -253,7 +253,7 @@ def test_partly_valid_reply_flags_what_was_withheld(monkeypatch):
     text = page_text(app)
     assert not app.exception and not app.error
     assert "Partly verified" in text and "M99" in text
-    assert "Delivery costs may have risen." not in text
+    assert "Auction competition may have raised delivery costs." not in text
     assert "AI-generated recommendations" in text
 
 
@@ -372,6 +372,24 @@ def test_dashboard_warns_about_recommendations_on_withheld_hypotheses(monkeypatc
     assert "not a validated conclusion" in text
 
 
+def test_groq_can_be_chosen_as_the_provider(monkeypatch):
+    provider = CountingProvider(good_reply())
+    monkeypatch.setattr(service, "create_provider", lambda settings: provider)
+    app = AppTest.from_file("../app.py", default_timeout=30)
+    app.secrets["FM_AI_ENABLED"] = "true"
+    app.secrets["AI_PROVIDER"] = "groq"
+    app.secrets["GROQ_API_KEY"] = "gsk_test_only"
+    app.run()
+
+    assert any("Groq: for local testing only" in item.value for item in app.caption)
+    generate_button(app).click()
+    app.run()
+
+    assert provider.calls == 1
+    assert "Auction competition may have raised delivery costs." in page_text(app)
+    assert "gsk_test_only" not in page_text(app)
+
+
 def capture_reports(monkeypatch):
     """Keep every report the app builds, because a download button hides its data."""
     built, real = [], report.build_report
@@ -407,7 +425,7 @@ def test_report_includes_the_ai_result_after_the_click(monkeypatch):
     app.run()
 
     assert not app.exception
-    assert "Delivery costs may have risen." in built[-1]
+    assert "Auction competition may have raised delivery costs." in built[-1]
     assert "Fake fake-model" in built[-1]
 
 
@@ -444,7 +462,7 @@ def test_report_never_contains_the_key(monkeypatch):
     generate_button(app).click()
     app.run()
 
-    assert "Delivery costs may have risen." in built[-1]
+    assert "Auction competition may have raised delivery costs." in built[-1]
     assert not any("secret-sentinel-value" in item for item in built)
 
 
