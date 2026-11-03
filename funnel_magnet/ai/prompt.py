@@ -13,7 +13,9 @@ Methodology, which you must follow:
 - CPA splits into CPC and CVR.
 - CPC splits into CPM and CTR.
 - CVR splits into the conversion funnel stages.
-Facts with kind "diagnostic_path" show the branches the diagnostic followed.
+Facts with kind "diagnostic_path" show the branches the diagnostic followed. A branch
+can explain a decline, an improvement, or a driver that offset the ROAS change, as
+each driver fact's effect_on_roas states.
 Only form hypotheses about metrics on those paths. If the only path is ROAS, return
 no hypotheses or recommendations.
 

@@ -137,12 +137,13 @@ def _driver_facts(diagnosis):
             f"D{number}",
             "mathematical_driver",
             f"{view.metric_label(driver.metric)} contributed {driver.contribution:+.2f} to ROAS "
-            f"({driver.weight:.0%} of all movement, {driver.role}).",
+            f"({driver.weight:.0%} of all movement, {view.contribution_label(diagnosis, driver).lower()}).",
             driver.metric,
             {
                 "roas_contribution": round(driver.contribution, 3),
                 "share_of_movement_percent": round(driver.weight * 100),
                 "role": driver.role,
+                "effect_on_roas": view.contribution_label(diagnosis, driver).lower(),
             },
         )
         for number, driver in enumerate(diagnosis.drivers, 1)

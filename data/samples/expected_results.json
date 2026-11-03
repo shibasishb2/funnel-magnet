@@ -73,6 +73,10 @@
     "expected_paths": [
       [
         "roas",
+        "aov"
+      ],
+      [
+        "roas",
         "cpa",
         "cpc",
         "cpm"

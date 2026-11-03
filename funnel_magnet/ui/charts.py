@@ -46,6 +46,7 @@ def contribution_waterfall(steps):
             "zeroline": False,
             "rangemode": "tozero",
         },
-        xaxis={"showgrid": False, "automargin": True},
+        # Labels such as 2026-10 would otherwise be read as dates, which breaks the steps.
+        xaxis={"showgrid": False, "automargin": True, "type": "category"},
     )
     return figure

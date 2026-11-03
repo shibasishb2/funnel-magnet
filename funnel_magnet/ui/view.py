@@ -168,15 +168,38 @@ def kpi_cards(diagnosis, currency=None):
     return cards
 
 
+POSITIVE = "Positive contributor"
+ADVERSE = "Adverse contributor"
+OFFSETTING = "Offsetting driver"
+NEGLIGIBLE = "Negligible"
+
+
+def roas_rose(diagnosis):
+    roas = diagnosis.changes["roas"]
+    return roas.prior is None or roas.current is None or roas.current >= roas.prior
+
+
+def contribution_label(diagnosis, driver):
+    """Name a driver by its effect: moving with the ROAS change, or offsetting it."""
+    if driver.role == "negligible":
+        return NEGLIGIBLE
+    if (driver.role == "favorable") != roas_rose(diagnosis):
+        return OFFSETTING
+    return POSITIVE if driver.role == "favorable" else ADVERSE
+
+
+def driver_groups(diagnosis):
+    """Return (material drivers moving with ROAS, those offsetting it), largest first."""
+    material = [d for d in diagnosis.drivers if d.role != "negligible"]
+    offsetting = [d for d in material if contribution_label(diagnosis, d) == OFFSETTING]
+    return [d for d in material if d not in offsetting], offsetting
+
+
 def driver_badges(diagnosis):
-    """Name the main mathematical drivers. Only engine drivers can get a badge."""
-    badges = {}
-    adverse = diagnosis.adverse_drivers
-    favorable = diagnosis.favorable_drivers
-    for rank, driver in enumerate(adverse):
-        badges[driver.metric] = "Main driver" if rank == 0 else "Driver"
-    if favorable:
-        badges[favorable[0].metric] = "Offset" if adverse else "Main driver"
+    """Badge the drivers. The main driver is the largest one moving with ROAS."""
+    with_roas, offsetting = driver_groups(diagnosis)
+    badges = {d.metric: "Main driver" if rank == 0 else "Driver" for rank, d in enumerate(with_roas)}
+    badges.update({d.metric: "Offset" for d in offsetting})
     return badges
 
 
@@ -237,6 +260,16 @@ def _observation(change, currency):
     return f"{label} {verb} {abs(change.pct_change):.1%}, from {prior} to {current}."
 
 
+def _explained(diagnosis, metric, inputs, lead=""):
+    changes = f"{lead}{_changes_text(diagnosis, inputs)}"
+    if diagnosis.changes[metric].status is Status.STABLE:
+        return (
+            f"{metric_label(metric)} changed by less than {format_threshold(diagnosis.threshold)}, "
+            f"with offsetting changes in {lead or 'its inputs: '}{_changes_text(diagnosis, inputs)}."
+        )
+    return f"The {metric_label(metric)} result is mathematically explained by {changes}."
+
+
 def _changes_text(diagnosis, metrics):
     return ", ".join(
         f"{metric_label(metric)} ({format_change(diagnosis.changes[metric].pct_change)})"
@@ -244,9 +277,9 @@ def _changes_text(diagnosis, metrics):
     )
 
 
-def _largest_driver(role, driver):
+def _largest_driver(label, driver):
     return (
-        f"The largest {role} driver is {metric_label(driver.metric)}, which contributed "
+        f"The largest {label.lower()} is {metric_label(driver.metric)}, which contributed "
         f"{driver.contribution:+.2f} to ROAS ({driver.weight:.0%} of all movement)."
     )
 
@@ -263,29 +296,23 @@ def mathematical_diagnosis(diagnosis, currency=None):
     if "aov" in nodes:
         sentences.append(_observation(changes["aov"], currency))
     if "cpa" in nodes:
-        sentences.append(
-            f"The CPA result is mathematically explained by {_changes_text(diagnosis, ('cpc', 'cvr'))}."
-        )
+        sentences.append(_explained(diagnosis, "cpa", ("cpc", "cvr")))
     if "cpc" in nodes:
-        sentences.append(
-            f"The CPC result is mathematically explained by {_changes_text(diagnosis, ('cpm', 'ctr'))}."
-        )
-    declined = [metric for metric in rate_metrics(diagnosis) if metric in nodes]
-    if declined:
-        sentences.append(
-            f"The CVR result is mathematically explained by these funnel stages: "
-            f"{_changes_text(diagnosis, declined)}."
-        )
+        sentences.append(_explained(diagnosis, "cpc", ("cpm", "ctr")))
+    stages = [metric for metric in rate_metrics(diagnosis) if metric in nodes]
+    if stages:
+        sentences.append(_explained(diagnosis, "cvr", stages, "these funnel stages: "))
 
-    adverse, favorable = diagnosis.adverse_drivers, diagnosis.favorable_drivers
+    with_roas, offsetting = driver_groups(diagnosis)
     if diagnosis.drivers_undefined_reason:
         sentences.append(
             f"Contributions were not calculated. {humanize(diagnosis.drivers_undefined_reason)}"
         )
-    elif adverse:
-        sentences.append(_largest_driver("adverse", adverse[0]))
-    if favorable and not diagnosis.drivers_undefined_reason:
-        sentences.append(_largest_driver("favorable", favorable[0]))
+    else:
+        if with_roas:
+            sentences.append(_largest_driver(contribution_label(diagnosis, with_roas[0]), with_roas[0]))
+        if offsetting:
+            sentences.append(_largest_driver(OFFSETTING, offsetting[0]))
     if nodes == {"roas"}:
         sentences.append(
             f"No branch needed investigation at the {format_threshold(diagnosis.threshold)} threshold."
@@ -295,9 +322,10 @@ def mathematical_diagnosis(diagnosis, currency=None):
     return sentences
 
 
-def _driver_sentence(driver):
+def _driver_sentence(diagnosis, driver):
     return (
-        f"{metric_label(driver.metric)} contributed {driver.contribution:+.2f} to ROAS "
+        f"{contribution_label(diagnosis, driver)}: {metric_label(driver.metric)} contributed "
+        f"{driver.contribution:+.2f} to ROAS "
         f"({driver.weight:.0%} of all movement)."
     )
 
@@ -324,8 +352,8 @@ def build_findings(diagnosis, currency=None):
     if diagnosis.drivers_undefined_reason:
         drivers = [f"Contributions were not calculated. {humanize(diagnosis.drivers_undefined_reason)}"]
     else:
-        material = [*diagnosis.adverse_drivers, *diagnosis.favorable_drivers]
-        drivers = [_driver_sentence(driver) for driver in material] or [
+        with_roas, offsetting = driver_groups(diagnosis)
+        drivers = [_driver_sentence(diagnosis, driver) for driver in [*with_roas, *offsetting]] or [
             f"No lowest-level metric changed by {format_threshold(diagnosis.threshold)} or more."
         ]
 
@@ -359,7 +387,7 @@ def driver_table(diagnosis):
             "Change": format_change(driver.pct_change),
             "ROAS contribution": f"{driver.contribution:+.3f}",
             "Share of movement": f"{driver.weight:.0%}",
-            "Role": driver.role.capitalize(),
+            "Effect on ROAS": contribution_label(diagnosis, driver),
         }
         for driver in diagnosis.drivers
     ]

@@ -183,7 +183,7 @@ def _contribution_table(diagnosis):
         f'<tr data-metric="{escape(driver.metric)}">'
         f'<th scope="row">{escape(row["Metric"])}</th><td>{escape(row["Change"])}</td>'
         f'<td>{escape(row["ROAS contribution"])}</td><td>{escape(row["Share of movement"])}</td>'
-        f'<td>{escape(row["Role"])}</td></tr>'
+        f'<td>{escape(row["Effect on ROAS"])}</td></tr>'
         for driver, row in zip(diagnosis.drivers, view.driver_table(diagnosis))
     ]
     total = sum(driver.contribution for driver in diagnosis.drivers)
@@ -191,7 +191,7 @@ def _contribution_table(diagnosis):
         f'<tr class="total"><th scope="row">Total ROAS change</th><td></td><td>{total:+.3f}</td>'
         "<td></td><td></td></tr>"
     )
-    return _table(("Metric", "Change", "ROAS contribution", "Share of movement", "Role"), rows, "numbers")
+    return _table(("Metric", "Change", "ROAS contribution", "Share of movement", "Effect on ROAS"), rows, "numbers")
 
 
 def _drivers_section(item):

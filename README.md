@@ -163,6 +163,8 @@ diagnosis = run_diagnosis(loaded.data, MONTHLY, threshold=0.05)
 
 A change of at least the materiality threshold is material. The default is 5%.
 
+The tree follows every material change, whether it raised or lowered ROAS. It also looks beneath a stable metric whose inputs moved materially, so a CPM rise offset by a CTR rise still appears even when CPC barely moved. Each driver is labelled by its effect: a positive or adverse contributor moves with the ROAS change, and an offsetting driver works against it. The main driver is the largest contribution moving with ROAS.
+
 A metric with a zero or missing denominator is undefined. Contributions that depend on an undefined or zero value are not calculated, and the result gives the reason.
 
 A blank cell is not treated as zero. A missing funnel value excludes that stage from any period containing it, and a blank in link clicks, purchases or purchase value blocks the file. Only if the user confirms that blanks mean 0 does `load_meta_csv(source, blank_actions_as_zero=True)` read them as 0.

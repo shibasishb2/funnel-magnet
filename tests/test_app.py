@@ -165,7 +165,7 @@ def test_mathematical_diagnosis_appears_without_a_key(monkeypatch):
     text = page_text(start())
 
     assert "Calculated by Python" in text
-    assert "The largest adverse driver is CPM" in text
+    assert "The largest adverse contributor is CPM" in text
 
 
 def test_model_is_not_called_on_load_or_refresh(monkeypatch):

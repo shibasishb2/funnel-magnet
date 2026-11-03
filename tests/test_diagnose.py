@@ -135,7 +135,8 @@ def test_better_roas_does_not_hide_a_worse_cpa():
     result = diagnose_totals(PRIOR, current)
 
     assert result.changes["roas"].status is Status.IMPROVED
-    assert result.paths[0][:2] == ("roas", "cpa")
+    assert ("roas", "aov") in result.paths
+    assert any(path[:2] == ("roas", "cpa") for path in result.paths)
 
 
 def test_cpa_with_no_single_material_input_stops_at_cpa():
@@ -222,7 +223,7 @@ def test_zero_purchases_in_both_periods_gives_no_contributions():
     assert result.drivers == []
 
 
-def test_recovery_from_zero_purchases_has_no_contributions():
+def test_recovery_from_zero_purchases_follows_cvr_without_contributions():
     prior = Totals(1000.0, 100_000.0, 2000.0, 0.0, 0.0)
     current = Totals(1000.0, 100_000.0, 2000.0, 50.0, 3000.0)
     result = diagnose_totals(prior, current)
@@ -230,7 +231,7 @@ def test_recovery_from_zero_purchases_has_no_contributions():
     assert result.changes["roas"].status is Status.IMPROVED
     assert result.changes["roas"].pct_change is None
     assert not result.decompositions["roas"].defined
-    assert result.paths == [("roas",)]
+    assert result.paths == [("roas", "cpa", "cvr")]
 
 
 def test_zero_link_clicks_is_handled():

@@ -101,7 +101,7 @@ SCENARIOS = (
         "file": "06_masked_problem.csv",
         "description": "Higher AOV offsets a higher CPM, so ROAS looks stable.",
         "shifts": {"aov": 1.20, "cpm": 1.18},
-        "expected_paths": [CPM_PATH],
+        "expected_paths": [["roas", "aov"], CPM_PATH],
         "expected_roas_status": "stable",
         "expected_top_adverse_driver": "cpm",
     },

@@ -2,6 +2,10 @@
 
 Everything here is mathematical. Results say which metrics moved and how much
 each one contributed, never why. Causes are hypotheses for a later stage.
+
+The tree follows every material change, better or worse, so an improvement is
+explained too. It also looks beneath a stable metric whose inputs moved
+materially, because opposing moves can cancel out in the parent.
 """
 
 from dataclasses import dataclass, field
@@ -199,6 +203,15 @@ def _leaf_drivers(changes, rate_names, cvr_split_defined):
     return drivers, None
 
 
+def _material(change):
+    return change.status in (Status.IMPROVED, Status.DETERIORATED)
+
+
+def _moved(changes, metric, children=()):
+    """A metric is followed if it, or any of its inputs, changed materially."""
+    return _material(changes[metric]) or any(_material(changes[child]) for child in children)
+
+
 def _need(diagnosis, metric):
     text = DATA_NEEDED[metric]
     if text not in diagnosis.data_needed:
@@ -211,7 +224,7 @@ def _investigate_cpc(diagnosis):
 
     paths = []
     for metric in ("cpm", "ctr"):
-        if changes[metric].status is Status.DETERIORATED:
+        if _material(changes[metric]):
             paths.append(("roas", "cpa", "cpc", metric))
             _need(diagnosis, metric)
     if not paths:
@@ -229,29 +242,30 @@ def _investigate_cvr(diagnosis, rate_names):
         _need(diagnosis, "cvr")
         return [("roas", "cpa", "cvr")]
 
-    declined = [name for name in rate_names if changes[name].status is Status.DETERIORATED]
+    moved = [name for name in rate_names if _material(changes[name])]
     for name in rate_names:
         diagnosis.steps.append(Step("cvr", _describe(changes[name])))
 
-    if not declined:
+    if not moved:
         diagnosis.steps.append(
-            Step("cvr", "No single funnel stage declined by the threshold or more.")
+            Step("cvr", "No single funnel stage changed by the threshold or more.")
         )
         return [("roas", "cpa", "cvr")]
 
-    for name in declined:
+    for name in moved:
         _need(diagnosis, name)
-    return [("roas", "cpa", "cvr", name) for name in declined]
+    return [("roas", "cpa", "cvr", name) for name in moved]
 
 
 def _investigate_cpa(diagnosis, rate_names):
     changes = diagnosis.changes
     diagnosis.steps.append(Step("cpa", _describe(changes["cpc"]) + " " + _describe(changes["cvr"])))
 
+    stages = rate_names if len(rate_names) > 1 else ()
     paths = []
-    if changes["cpc"].status is Status.DETERIORATED:
+    if _moved(changes, "cpc", ("cpm", "ctr")):
         paths += _investigate_cpc(diagnosis)
-    if changes["cvr"].status is Status.DETERIORATED:
+    if _moved(changes, "cvr", stages):
         paths += _investigate_cvr(diagnosis, rate_names)
     if not paths:
         diagnosis.steps.append(
@@ -328,14 +342,15 @@ def diagnose_totals(prior, current, threshold=DEFAULT_MATERIALITY_THRESHOLD,
 
     # Step 2: split ROAS into AOV and CPA.
     diagnosis.steps.append(Step("roas", _describe(changes["aov"]) + " " + _describe(changes["cpa"])))
-    if changes["aov"].status is Status.DETERIORATED:
+    if _material(changes["aov"]):
         diagnosis.paths.append(("roas", "aov"))
         _need(diagnosis, "aov")
 
-    # Steps 3 to 5 depend on CPA rather than ROAS, so a higher AOV cannot hide a
-    # worse CPA. Losing all purchases leaves CPA undefined but is still a decline.
+    # Steps 3 to 5 depend on CPA rather than ROAS, so a change in AOV cannot hide
+    # one in CPA. Losing all purchases leaves CPA undefined but is still a decline.
     lost_all_purchases = current.purchases == 0
-    if changes["cpa"].status is Status.DETERIORATED or lost_all_purchases:
+    below_cpa = ("cpc", "cvr", "cpm", "ctr", *(rate_names if len(rate_names) > 1 else ()))
+    if _moved(changes, "cpa", below_cpa) or lost_all_purchases:
         diagnosis.paths += _investigate_cpa(diagnosis, rate_names)
 
     if not diagnosis.paths:

@@ -96,7 +96,7 @@ def test_kpis_cover_all_seven_metrics_for_both_periods():
         (2, {"roas", "cpa", "cvr", "link_clicks_to_landing_page_views"}),
         (3, {"roas", "cpa", "cvr", "checkouts_initiated_to_purchases"}),
         (4, {"roas", "aov"}),
-        (5, {"roas", "cpa", "cpc", "cpm"}),
+        (5, {"roas", "aov", "cpa", "cpc", "cpm"}),
         (6, {"roas"}),
     ],
 )
@@ -122,10 +122,11 @@ def test_main_driver_badge_goes_to_the_engine_top_driver():
     assert sum(node.badge is not None for node in walk(root)) == len(view.driver_badges(diagnosis))
 
 
-def test_masked_problem_labels_the_aov_gain_as_an_offset():
+def test_masked_problem_badges_follow_the_direction_of_roas():
+    # ROAS rose slightly, so the AOV gain leads and the CPM rise offsets it.
     badges = view.driver_badges(diagnose(5))
 
-    assert badges == {"cpm": "Main driver", "aov": "Offset"}
+    assert badges == {"aov": "Main driver", "cpm": "Offset"}
 
 
 def test_healthy_control_has_no_badges():
@@ -175,6 +176,14 @@ def test_zero_spend_comparison_still_produces_display_values():
     assert view.waterfall_steps(diagnosis) is None
 
 
+@pytest.mark.parametrize("granularity", [WEEKLY, MONTHLY])
+def test_waterfall_labels_are_categories_not_dates(granularity):
+    # A monthly label such as 2026-10 must not turn the axis into a calendar.
+    figure = charts.contribution_waterfall(view.waterfall_steps(diagnose(0, granularity)))
+
+    assert figure.layout.xaxis.type == "category"
+
+
 def test_waterfall_figure_uses_the_steps():
     steps = view.waterfall_steps(diagnose(0))
     trace = charts.contribution_waterfall(steps).data[0]
@@ -189,7 +198,7 @@ def test_mathematical_diagnosis_follows_the_engine_path():
     assert text.startswith("ROAS fell 14.3%, from 4.13 to 3.54.")
     assert "The CPA result is mathematically explained by CPC (+17.1%), CVR (+0.3%)." in text
     assert "The CPC result is mathematically explained by CPM (+18.3%), CTR (+1.0%)." in text
-    assert "The largest adverse driver is CPM, which contributed -0.64 to ROAS (88% of all movement)." in text
+    assert "The largest adverse contributor is CPM, which contributed -0.64 to ROAS (88% of all movement)." in text
     assert text.endswith("This shows how ROAS changed arithmetically, not why.")
 
 
@@ -209,8 +218,9 @@ def test_mathematical_diagnosis_covers_aov():
 def test_mathematical_diagnosis_shows_the_offset_in_a_masked_problem():
     text = " ".join(view.mathematical_diagnosis(diagnose(5)))
 
-    assert "largest adverse driver is CPM" in text
-    assert "largest favorable driver is AOV" in text
+    assert "AOV rose 20.1%" in text
+    assert "largest positive contributor is AOV" in text
+    assert "largest offsetting driver is CPM" in text
 
 
 def test_mathematical_diagnosis_for_a_healthy_control():
@@ -231,7 +241,7 @@ def test_mathematical_diagnosis_without_contributions():
     text = " ".join(view.mathematical_diagnosis(diagnose_totals(PRIOR, current)))
 
     assert "Contributions were not calculated." in text
-    assert "largest adverse driver" not in text
+    assert "largest adverse contributor" not in text
 
 
 def test_mathematical_diagnosis_when_roas_cannot_be_compared():
@@ -258,7 +268,7 @@ def test_findings_separate_observations_from_drivers_and_causes():
     findings = view.build_findings(diagnose(0), "EUR")
 
     assert findings.observations[0].startswith("ROAS fell 14.3%")
-    assert any(line.startswith("CPM contributed") for line in findings.drivers)
+    assert any(line.startswith("Adverse contributor: CPM contributed") for line in findings.drivers)
     assert any("Competitor activity" in line for line in findings.evidence_needed)
 
 
