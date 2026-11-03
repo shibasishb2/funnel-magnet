@@ -109,3 +109,11 @@ footer { border-top: 1px solid var(--line); color: var(--muted); font-size: 0.8r
 .alert.pattern { background: var(--soft); border-color: var(--ink); }
 .card.priority { border-left: 4px solid var(--ink); }
 .ai-note { border-left: 3px dashed var(--muted); padding-left: 8px; }
+
+/* Level 1: the executive diagnosis */
+section.executive { border-left-color: var(--ink); }
+.headline { color: var(--ink); font-size: 1.15rem; font-weight: 700; line-height: 1.4; }
+.hidden-problem { background: #fff3e0; border-radius: 4px; color: #8a3b00; font-size: 0.75rem; font-weight: 600; padding: 1px 6px; }
+h2.part { border-top: 1px solid var(--line); margin-top: 36px; padding-top: 20px; }
+.source { border-radius: 4px; color: var(--muted); font-size: 0.85rem; padding: 4px 8px; background: var(--soft); }
+.source-synthetic { background: #fff3e0; color: #8a3b00; font-weight: 600; }

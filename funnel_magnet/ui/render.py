@@ -235,3 +235,48 @@ def actions_html(marketing):
         '<p class="fm-panel-note">Nothing here is confirmed. Act only on what the investigation supports.</p>'
         f"{body}</section>"
     )
+
+
+def executive_html(summary):
+    """Level 1: the executive diagnosis, from the same diagnosis as the detailed analysis."""
+    narrative = "".join(f"<p>{escape(sentence)}</p>" for sentence in summary.narrative)
+    if summary.problems:
+        problems = "<ul>" + "".join(
+            f"<li><strong>{escape(p.change)}</strong>"
+            + (' <span class="fm-hidden">Hidden by overall ROAS</span>' if p.hidden else "")
+            + (f'<div class="fm-panel-note">{escape(p.effect)}</div>' if p.effect else "")
+            + (f"<div>Why it matters: {escape(p.why)}</div>" if p.why else "")
+            + "</li>"
+            for p in summary.problems
+        ) + "</ul>"
+    else:
+        problems = "<p>No final KPI worsened by the threshold or more.</p>"
+    checks = "".join(
+        '<article class="fm-ai-card fm-exec-check">'
+        f'<div class="fm-ai-card-tag">Priority {c.rank} · {escape(c.where)}</div>'
+        f"<p><strong>{escape(c.title)}.</strong> {escape(c.what)}</p>"
+        + (f"<p><strong>What it could mean:</strong> {escape(c.could_mean)}</p>" if c.could_mean else "")
+        + (f'<p class="fm-panel-note">Why first: {escape(c.why_first)}</p>' if c.why_first else "")
+        + _ai_note("Why the AI ranks it here", c.ai_note)
+        + "</article>"
+        for c in summary.checks
+    )
+    steps = "".join(f"<li><strong>{escape(s.cause)}.</strong> {escape(s.text)}</li>" for s in summary.next_steps)
+    source_class = "fm-source fm-source-synthetic" if summary.synthetic else "fm-source"
+    source = f'<p class="{source_class}">{escape(summary.source)}</p>' if summary.source else ""
+    notes = "".join(f"<li>{escape(note)}</li>" for note in summary.data_notes)
+    return (
+        '<section class="fm-panel fm-executive fm-section">'
+        '<div class="fm-panel-tag">Plain-English summary · Written from Python\'s calculations</div>'
+        f'{source}<p class="fm-headline">{escape(summary.headline)}</p>{narrative}'
+        f"{_ai_note('AI, how the problems may relate', summary.ai_relationship)}"
+        f'<div class="fm-ai-heading">KPIs that need attention</div>{problems}'
+        + (f'<div class="fm-ai-heading">Top three investigations</div>{checks}' if checks else "")
+        + (
+            '<div class="fm-ai-heading">Next steps, only if the evidence supports them</div>'
+            f'<ul>{steps}</ul><p class="fm-panel-note">The full action plan for every cause is in the detailed analysis.</p>'
+            if steps else ""
+        )
+        + (f'<div class="fm-ai-heading">Data notes</div><ul class="fm-panel-note">{notes}</ul>' if notes else "")
+        + "</section>"
+    )

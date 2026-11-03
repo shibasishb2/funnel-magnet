@@ -122,6 +122,7 @@ def test_app_opens_on_a_sample_without_errors():
     assert not app.exception
     assert "Funnel Magnet" in page_text(app)
     assert [item.value for item in app.subheader] == [
+        "Executive diagnosis",
         "Marketing diagnosis",
         "KPI overview",
         "Diagnostic decision tree",
@@ -129,6 +130,12 @@ def test_app_opens_on_a_sample_without_errors():
         "Possible causes, checks and actions",
         "Data quality",
     ]
+    # Level 1 sits on the page, and everything else is in one collapsed expander.
+    assert [e.label for e in app.expander] == ["Detailed analysis: KPIs, decision tree, contributions, full playbook and data quality"]
+    detail = app.expander[0]
+    assert [item.value for item in detail.subheader][0] == "Marketing diagnosis"
+    assert any("fm-executive" in item.body for item in app.main.get("html")) and not any(
+        "fm-executive" in item.body for item in detail.get("html"))
 
 
 def test_without_a_key_the_button_is_off_and_the_dashboard_works(monkeypatch):
@@ -546,6 +553,16 @@ def test_uploaded_file_is_diagnosed():
 
     assert not app.exception
     assert "KPI overview" in [item.value for item in app.subheader]
+    # Uploaded results are labelled as the user's own file, never as the synthetic demo.
+    assert "Your uploaded data: export.csv." in page_text(app)
+    assert "Synthetic demonstration data" not in page_text(app)
+
+
+def test_sample_results_are_labelled_synthetic():
+    text = page_text(start())
+
+    assert "Synthetic demonstration data: the “CPM inflation” sample scenario." in text
+    assert "Your uploaded data" not in text
 
 
 def test_invalid_upload_shows_validation_messages():

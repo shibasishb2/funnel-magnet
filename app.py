@@ -14,7 +14,7 @@ from funnel_magnet.ai.providers import AIError
 from funnel_magnet.diagnose import DEFAULT_MATERIALITY_THRESHOLD, run_diagnosis
 from funnel_magnet.periods import MONTHLY, WEEKLY, list_complete_periods
 from funnel_magnet.sources.meta import ACCOUNT_LEVEL_CAMPAIGN, load_meta_csv
-from funnel_magnet.ui import charts, render, report, view
+from funnel_magnet.ui import charts, executive, render, report, view
 from funnel_magnet.version import code_version
 
 SAMPLE_SOURCE = "Sample scenario"
@@ -40,7 +40,7 @@ def load_data(raw, blank_actions_as_zero, running_code):
 
 
 def select_source():
-    """Return (name, raw bytes), or None until a file has been uploaded."""
+    """Return (name, raw bytes, synthetic), or None until a file has been uploaded."""
     st.sidebar.header("Data")
     source = st.sidebar.radio("Data source", [SAMPLE_SOURCE, UPLOAD_SOURCE])
 
@@ -48,11 +48,11 @@ def select_source():
         samples = view.load_samples()
         sample = st.sidebar.selectbox("Scenario", samples, format_func=lambda item: item.name)
         st.sidebar.caption(f"Synthetic data. {sample.description}")
-        return sample.name, sample.path.read_bytes()
+        return sample.name, sample.path.read_bytes(), True
 
     st.sidebar.warning(PRIVACY_NOTICE)
     uploaded = st.sidebar.file_uploader("Meta Ads daily export", type=["csv"])
-    return (uploaded.name, uploaded.getvalue()) if uploaded else None
+    return (uploaded.name, uploaded.getvalue(), False) if uploaded else None
 
 
 def show_load_errors(result):
@@ -142,8 +142,9 @@ def show_contributions(diagnosis):
         "Green bars add to ROAS and red bars subtract from it. Each label shows ROAS points, "
         "and the bars sum exactly to the ROAS change."
     )
-    with st.expander("Contribution table"):
-        st.dataframe(pd.DataFrame(view.driver_table(diagnosis)), hide_index=True)
+    # Shown directly, because this sits inside the Detailed analysis expander.
+    st.caption("Contribution table")
+    st.dataframe(pd.DataFrame(view.driver_table(diagnosis)), hide_index=True)
 
 
 def show_data_quality(load_warnings, diagnosis):
@@ -242,7 +243,7 @@ def show_report_button(report_input):
     )
 
 
-def show_dashboard(result, diagnosis, source_name, settings):
+def show_dashboard(result, diagnosis, source_name, settings, synthetic=False):
     currency = result.currency
     scope = settings["campaign"] or ALL_CAMPAIGNS
     single_campaign = settings["campaign"] is not None
@@ -273,30 +274,38 @@ def show_dashboard(result, diagnosis, source_name, settings):
         earlier_periods=any(period.end < settings["prior_period"].start for period in periods),
     )
 
-    st.subheader("Marketing diagnosis")
-    st.html(render.confirmed_findings_html(marketing))
-
-    st.subheader("KPI overview")
-    st.html(render.kpis_html(view.kpi_cards(diagnosis, currency), prior_label, current_label))
-
-    st.subheader("Diagnostic decision tree")
-    st.caption(
-        "Dark outlines show the path the diagnostic followed. Grey boxes were calculated but not "
-        f"followed. Changes of {view.format_threshold(diagnosis.threshold)} or more are material."
-    )
-    st.html(render.tree_html(view.build_tree(diagnosis, currency)))
-
-    show_contributions(diagnosis)
-
-    st.subheader("Possible causes, checks and actions")
+    # Level 1 is drawn after the AI control runs, so it shows any AI prioritisation.
+    st.subheader("Executive diagnosis")
+    summary_slot = st.container()
     marketing = show_ai_priorities(marketing, evidence, diagnosis.assessable)
     if marketing.ai:
         st.html(render.ai_status_html(marketing.ai))
-    st.html(render.possible_causes_html(marketing))
-    st.html(render.investigations_html(marketing))
-    st.html(render.actions_html(marketing))
+    with summary_slot:
+        warnings = [issue.message for issue in result.warnings]
+        st.html(render.executive_html(executive.build(diagnosis, marketing, warnings, source_name, synthetic)))
 
-    show_data_quality(result.warnings, diagnosis)
+    with st.expander("Detailed analysis: KPIs, decision tree, contributions, full playbook and data quality"):
+        st.subheader("Marketing diagnosis")
+        st.html(render.confirmed_findings_html(marketing))
+
+        st.subheader("KPI overview")
+        st.html(render.kpis_html(view.kpi_cards(diagnosis, currency), prior_label, current_label))
+
+        st.subheader("Diagnostic decision tree")
+        st.caption(
+            "Dark outlines show the path the diagnostic followed. Grey boxes were calculated but not "
+            f"followed. Changes of {view.format_threshold(diagnosis.threshold)} or more are material."
+        )
+        st.html(render.tree_html(view.build_tree(diagnosis, currency)))
+
+        show_contributions(diagnosis)
+
+        st.subheader("Possible causes, checks and actions")
+        st.html(render.possible_causes_html(marketing))
+        st.html(render.investigations_html(marketing))
+        st.html(render.actions_html(marketing))
+
+        show_data_quality(result.warnings, diagnosis)
 
     dates = result.data["date"]
     with report_slot:
@@ -313,6 +322,7 @@ def show_dashboard(result, diagnosis, source_name, settings):
                 currency=currency,
                 load_warnings=tuple(issue.message for issue in result.warnings),
                 marketing=marketing,
+                synthetic=synthetic,
             )
         )
 
@@ -337,7 +347,7 @@ def main():
     if selected is None:
         st.info("Upload a Meta Ads daily export in the sidebar, or choose a sample scenario.")
     else:
-        source_name, raw = selected
+        source_name, raw, synthetic = selected
         result = load_data(raw, blanks_are_zero, code_version())
         if not result.ok:
             show_load_errors(result)
@@ -349,7 +359,7 @@ def main():
                 except ValueError as error:
                     st.error(str(error))
                 else:
-                    show_dashboard(result, diagnosis, source_name, settings)
+                    show_dashboard(result, diagnosis, source_name, settings, synthetic)
 
     st.caption(f"ESCP MBA prototype, version {__version__}. Use synthetic or anonymized data only.")
 

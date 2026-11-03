@@ -12,7 +12,7 @@ from pathlib import Path
 from funnel_magnet import __version__, playbook
 from funnel_magnet.ai.evidence import EvidencePack
 from funnel_magnet.diagnose import Diagnosis
-from funnel_magnet.ui import view
+from funnel_magnet.ui import executive, view
 from funnel_magnet.ui.render import STATUS_CLASSES, STATUS_ICONS, _items
 
 STYLE_PATH = Path(__file__).with_name("report.css")
@@ -70,6 +70,8 @@ class ReportInput:
     load_warnings: tuple[str, ...] = ()
     # The dashboard passes the diagnosis it displayed, so the report matches it exactly.
     marketing: playbook.MarketingDiagnosis | None = None
+    # True for a built-in sample scenario, so the report says its figures are invented.
+    synthetic: bool = False
 
     @property
     def sections(self):
@@ -236,6 +238,51 @@ def _where(check):
     return "In your upload" if check.available else "Collect outside this app"
 
 
+def _executive_section(item):
+    """Level 1, built by the same function as the dashboard's, from the same diagnosis."""
+    summary = executive.build(item.diagnosis, item.sections, item.load_warnings, item.source_name, item.synthetic)
+    narrative = "".join(f"<p>{escape(sentence)}</p>" for sentence in summary.narrative)
+    problems = "".join(
+        f"<li><strong>{escape(p.change)}</strong>"
+        + (' <span class="hidden-problem">Hidden by overall ROAS</span>' if p.hidden else "")
+        + (f'<div class="note">{escape(p.effect)}</div>' if p.effect else "")
+        + (f"<div>Why it matters: {escape(p.why)}</div>" if p.why else "")
+        + "</li>"
+        for p in summary.problems
+    )
+    checks = "".join(
+        '<article class="card exec-check">'
+        f'<div class="card-tag">Priority {c.rank} · {escape(c.where)}</div>'
+        f"<p><strong>{escape(c.title)}.</strong> {escape(c.what)}</p>"
+        + (f"<p><strong>What it could mean:</strong> {escape(c.could_mean)}</p>" if c.could_mean else "")
+        + (f'<p class="note">Why first: {escape(c.why_first)}</p>' if c.why_first else "")
+        + _ai_note("Why the AI ranks it here", c.ai_note)
+        + "</article>"
+        for c in summary.checks
+    )
+    steps = "".join(f"<li><strong>{escape(s.cause)}.</strong> {escape(s.text)}</li>" for s in summary.next_steps)
+    source_class = "source source-synthetic" if summary.synthetic else "source"
+    source = f'<p class="{source_class}">{escape(summary.source)}</p>' if summary.source else ""
+    notes = "".join(f"<li>{escape(note)}</li>" for note in summary.data_notes)
+    return (
+        '<section class="executive"><h2>Executive diagnosis</h2>'
+        f"{_tag('confirmed', 'Written from Python’s calculations')}"
+        f'{source}<p class="headline">{escape(summary.headline)}</p>{narrative}'
+        f"{_ai_note('AI, how the problems may relate', summary.ai_relationship)}"
+        "<h3>KPIs that need attention</h3>"
+        + (f"<ul>{problems}</ul>" if problems else "<p>No final KPI worsened by the threshold or more.</p>")
+        + (f"<h3>Top three investigations</h3>{checks}" if checks else "")
+        + (
+            f"<h3>Next steps, only if the evidence supports them</h3><ul>{steps}</ul>"
+            '<p class="note">The full action plan for every cause is in section 4.</p>'
+            if steps else ""
+        )
+        + (f'<h3>Data notes</h3><ul class="note">{notes}</ul>' if notes else "")
+        + "</section>"
+        '<h2 class="part">Detailed analysis</h2>'
+    )
+
+
 def _causes_section(item):
     marketing = item.sections
     notes = "".join(f'<div class="alert pattern">{escape(note)}</div>' for note in (*marketing.patterns, *marketing.component_notes))
@@ -372,7 +419,7 @@ def build_report(item):
         "<h1>Meta Ads Diagnostic Report</h1></header>"
         f"{_details_html(item)}"
         f'<p class="notice">{escape(view.DECISION_SUPPORT_NOTICE)}</p>'
-        f"{_ai_alert(item.marketing)}{_legend()}"
+        f"{_ai_alert(item.marketing)}{_executive_section(item)}{_legend()}"
         f"{_findings_section(item)}{_causes_section(item)}{_investigations_section(item)}"
         f"{_actions_section(item)}{_ai_sections(item)}"
         f"{_quality_section(item, first_free)}{_method_section(first_free + 1)}"

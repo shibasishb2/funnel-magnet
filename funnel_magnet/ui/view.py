@@ -36,6 +36,69 @@ STATUS_LABELS = {
     Status.UNDEFINED: "Undefined",
 }
 
+# Plain names and why a worsening matters, for marketers. The arithmetic behind each:
+# ROAS = AOV / CPA, CPA = CPC / CVR, CPC = CPM / CTR, and CVR is the product of the
+# funnel stages.
+PLAIN_NAMES = {
+    "roas": "return on ad spend",
+    "aov": "average order value",
+    "cpa": "cost per purchase",
+    "cpc": "cost per click",
+    "cvr": "conversion rate",
+    "cpm": "cost per 1,000 impressions",
+    "ctr": "click-through rate",
+    "link_clicks_to_landing_page_views": "share of clicks that reach the landing page",
+    "landing_page_views_to_add_to_carts": "share of visitors who add to cart",
+    "add_to_carts_to_checkouts_initiated": "share of carts that reach checkout",
+    "checkouts_initiated_to_purchases": "share of checkouts that end in a purchase",
+}
+WHY_IT_MATTERS = {
+    "roas": (
+        "Every unit of ad spend now brings back less revenue, so advertising is less profitable "
+        "and harder to scale without losing money."
+    ),
+    "aov": (
+        "Each order is worth less, so the same advertising cost per sale earns less revenue "
+        "and less margin."
+    ),
+    "cpa": (
+        "Each sale costs more to win, which eats into the margin on every order unless "
+        "orders become more valuable."
+    ),
+    "cpc": (
+        "Each ad click costs more, so the same budget brings fewer potential customers to "
+        "the site and each sale costs more."
+    ),
+    "cvr": (
+        "A smaller share of ad clicks turn into purchases, so more ad spend is needed for "
+        "every sale."
+    ),
+    "cpm": (
+        "Reaching people costs more, so every click and every sale costs more unless people "
+        "click and buy more often."
+    ),
+    "ctr": (
+        "Fewer people who see the ads click, so more paid impressions are needed for each "
+        "visit, which raises the cost of every click and sale."
+    ),
+    "link_clicks_to_landing_page_views": (
+        "More paid clicks never reach the landing page, so budget is spent on visits that "
+        "never happen."
+    ),
+    "landing_page_views_to_add_to_carts": (
+        "Fewer visitors add products to the cart, so more paid traffic is needed for each "
+        "sale."
+    ),
+    "add_to_carts_to_checkouts_initiated": (
+        "Fewer shoppers move from the cart to checkout, so sales slip away after customers "
+        "have shown they want to buy."
+    ),
+    "checkouts_initiated_to_purchases": (
+        "Fewer shoppers who start checkout finish paying, so sales are lost at the last "
+        "step, after the advertising cost has already been paid."
+    ),
+}
+
 UNDEFINED = "n/a"
 
 DECISION_SUPPORT_NOTICE = (

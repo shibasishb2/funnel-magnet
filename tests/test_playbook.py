@@ -383,7 +383,8 @@ def test_top_three_and_full_lists_show_on_the_page_and_in_the_report():
         diagnosis, build_evidence(diagnosis, "EUR"), "File", "All campaigns", "a", "b", "c", date(2026, 11, 3), "EUR", marketing=marketing,
     ))
 
-    assert page.count("Priority ") == 3 and html.count("Priority ") == 3
+    # The report repeats the top three in its executive diagnosis.
+    assert page.count("Priority ") == 3 and html.count("Priority ") == 6
     assert "<details" in page and "<details" not in html
     for item in marketing.investigations:
         assert item.title in page and item.title in html

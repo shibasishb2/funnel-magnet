@@ -82,7 +82,20 @@ Choose a sample scenario or upload a Meta Ads daily export in the sidebar, then 
 
 ## Marketing diagnosis
 
-The dashboard and report both show one four-part diagnosis, built by `funnel_magnet/playbook.py` with no AI:
+The page opens with an **executive diagnosis** for marketers and business owners, built by `funnel_magnet/ui/executive.py` from Python templates only:
+
+- a headline with the ROAS movement and any problem hidden by improving or stable ROAS
+- a short narrative of how each important KPI movement reached ROAS, in figures
+- every KPI that worsened materially, with why it matters in plain business terms
+- the top three investigations: what to check, where, and what a result could mean
+- up to three next steps from the playbook: the possible cause, how to test it, and what to consider if the evidence supports it
+- brief data notes, and a label saying whether the figures are a synthetic sample scenario or the user's uploaded file
+
+It restates the same diagnosis as the detailed analysis and adds no finding. After AI prioritisation, its checks, next steps and notes follow the AI's order, while the headline and figures stay as Python wrote them. The plain-English KPI explanations live in `funnel_magnet/ui/view.py`.
+
+Everything else sits in the collapsed **Detailed analysis** section: the KPI cards, decision tree, contribution chart and table, and the four-part diagnosis below. The report shows the executive diagnosis first, then the complete detailed analysis.
+
+The detailed analysis holds one four-part diagnosis, built by `funnel_magnet/playbook.py` with no AI:
 
 - **A. Confirmed findings:** what the data establishes, including each KPI that worsened or improved materially, its path through the tree and its effect on ROAS. Improvements are reported, with no causes suggested.
 - **B. Possible causes:** causes from the marketing playbook for each KPI that worsened, all worded as possibilities. One cause can cover several problems, and combination rules flag patterns such as CPM and CTR worsening together. CPC and CPA get their components checked instead of causes of their own.
