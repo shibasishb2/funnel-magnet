@@ -303,12 +303,6 @@ def test_html_escapes_data_text():
     assert "<b>x</b>" not in render.kpis_html(cards, "<i>p</i>", "c")
 
 
-def test_findings_html_labels_each_kind_of_statement():
-    html = render.findings_html(view.build_findings(diagnose(0)))
-
-    assert "Confirmed observations" in html
-    assert "Mathematical drivers" in html
-    assert "cannot show causes" in html
 
 
 def test_tree_html_marks_path_and_driver():

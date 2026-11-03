@@ -2,9 +2,9 @@
 
 AI Marketing Performance Diagnostic Agent: an ESCP MBA prototype that diagnoses changes in Meta Ads performance.
 
-**Status:** Stages 0 to 4 are complete, and the project is prepared for Streamlit Community Cloud. Python writes the mathematical diagnosis, and Gemini only interprets it. AI analysis is off by default. No live Gemini response has passed every check, so the app shows the sections that pass and flags the rest.
+**Status:** Stages 0 to 4 are complete, and the app is set up as a controlled demonstration for authorised testers on Streamlit Community Cloud. Python finds the problem KPIs, and a marketing playbook supplies possible causes, checks and conditional actions. An optional AI step only orders and explains them, and AI is off by default.
 
-Use synthetic or anonymized data only.
+Use synthetic or anonymized data only. The upload panel says so before any file is chosen, and AI prioritisation sends Groq only totals and playbook text, never rows, campaign names or file names. Groq stores data in the United States, so client or personal data must not be uploaded to the demonstration.
 
 Results are decision support for a person to review. They are not automatically verified causal conclusions.
 
@@ -54,22 +54,39 @@ python -m venv "$env:USERPROFILE\.venvs\funnel-magnet"
 1. Push this repository to GitHub.
 2. In Streamlit Community Cloud, create an app from the repository, on branch `main`, with `app.py` as the main file.
 3. Under Advanced settings, choose Python 3.12.
-4. Leave Secrets empty, then deploy.
-
-With no secrets, the app stays fully usable for sample scenarios, CSV upload, the dashboard and report downloads, and it cannot call Gemini. Never add a key to a file in the repository.
+4. Add the secrets below, then deploy.
 
 Uploads are limited to 20 MB. Community Cloud apps can sleep when unused, so open the link shortly before a demonstration.
 
-To switch AI on later, first enable billing on the Google project and confirm it in Google's console. Then add these under the app's Secrets settings:
+### Secrets for the tester demonstration
+
+In Streamlit Community Cloud, open the app's **Settings**, then **Secrets**, and paste this with your own values:
 
 ```toml
-FM_AI_ENABLED = "true"
-GEMINI_API_KEY = "your-key"
-GEMINI_TIER = "paid"
 FM_SHARED_DEPLOYMENT = "true"
+FM_ACCESS_PASSWORD = "a long random password for testers"
+FM_AI_ENABLED = "true"
+AI_PROVIDER = "groq"
+GROQ_API_KEY = "your Groq key"
+GROQ_MODEL = "openai/gpt-oss-120b"
 ```
 
-The only spending safeguard in the app is the limit of 10 requests per browser session. It doesn't limit total use across visitors, so set a budget alert in Google Cloud and add stronger limits before enabling AI publicly.
+Save, and the app restarts with them. Never add a key or password to a file in the repository. Share the password with testers outside the app, and change it in Secrets to revoke access.
+
+`FM_SHARED_DEPLOYMENT = "true"` keeps the app closed until `FM_ACCESS_PASSWORD` holds at least 12 characters. Groq is available in a shared deployment only behind that sign-in. Without the AI settings, signed-in testers still get the full diagnosis and report.
+
+Use a Groq key from the free plan. The app has no setting that can buy paid usage, and the limits below are not a billing cap, so don't attach a payment method to the Groq organisation used for the demonstration.
+
+## Tester access
+
+A shared deployment shows only a sign-in form until a tester enters the shared password. Until then no data, diagnosis, upload, report or AI control is reachable. **Sign out** in the sidebar ends the session.
+
+This is prototype access control, not production user authentication:
+
+- One password is shared by every tester. There are no individual accounts and no audit of who used the app.
+- The password is compared in constant time. Five wrong attempts lock that browser session, and a one-second pause slows each wrong attempt. Opening a new tab starts a new session, so a long random password is the real protection.
+- Sign-in lasts for one browser session. Reloading the page signs the tester out.
+- Streamlit Community Cloud serves the app over HTTPS. The password is never shown, logged, or written to the report.
 
 ## Dashboard
 
@@ -77,90 +94,103 @@ Choose a sample scenario or upload a Meta Ads daily export in the sidebar, then 
 
 `funnel_magnet/ui/` only presents engine results and calculates no metrics. Screenshots in `docs/screenshots/` come from earlier stages, so the current layout differs slightly.
 
-## AI diagnosis
+## Marketing diagnosis
 
-The dashboard works without AI. AI analysis stays off until `FM_AI_ENABLED` is `true`, even if a key is present. **Generate AI Diagnosis** calls the model only when clicked, and the result is kept for that exact evidence. Each session allows 10 requests.
+The dashboard and report both show one four-part diagnosis, built by `funnel_magnet/playbook.py` with no AI:
 
-### Set up a key
+- **A. Confirmed findings:** what the data establishes, including each KPI that worsened or improved materially, its path through the tree and its effect on ROAS. Improvements are reported, with no causes suggested.
+- **B. Possible causes:** causes from the marketing playbook for each KPI that worsened, all worded as possibilities. One cause can cover several problems, and combination rules flag patterns such as CPM and CTR worsening together. CPC and CPA get their components checked instead of causes of their own.
+- **C. What to investigate:** the evidence that would tell the causes apart, split into checks available in the upload and data to collect elsewhere.
+- **D. Potential actions:** for each cause, what to do if the evidence supports it and what to do if it doesn't.
 
-1. Create a key on the API keys page in Google AI Studio, and restrict it to the Gemini API if that option is offered.
-2. Copy `.streamlit/secrets.toml.example` to `.streamlit/secrets.toml`, which Git ignores.
-3. Replace the placeholder with your key, keep `FM_AI_ENABLED = "true"`, then restart the app.
+The playbook lives in `funnel_magnet/playbook.toml` and can be edited without changing code. The tests reject a playbook with an unhedged cause, an unknown metric or a missing reference.
 
-You can set these as environment variables instead. Never commit a key or share it in chat.
+## AI prioritisation
 
-| Setting | Default | Purpose |
-|---|---|---|
-| `FM_AI_ENABLED` | `false` | Must be `true` before any live AI call is possible |
-| `GEMINI_API_KEY` | None | Server-side key |
-| `GEMINI_MODEL` | `gemini-3.1-flash-lite` | Model name |
-| `GEMINI_TIER` | `free` | Set to `paid` once the Google project has billing enabled |
-| `FM_SHARED_DEPLOYMENT` | `false` | Set to `true` for a shared app. AI analysis then stays off until `GEMINI_TIER` is `paid`. |
+The diagnosis in sections A to D is complete without AI. **Prioritise with AI** asks a model to order and explain the playbook's possible causes and checks for the current comparison. It can't make a diagnosis of its own.
 
-### Use Groq instead
+AI stays off until `FM_AI_ENABLED` is `true`, even if a key is present. When it is off or unavailable, no AI button is shown, only a one-line reason.
 
-Groq is an optional alternative provider, using `openai/gpt-oss-120b` by default. It receives the same evidence, and its replies go through the same normalizer and validator. In live tests the 20B model broke the response format in about one reply in three.
+### What the AI may and may not do
+
+The model receives ROAS's direction, the mathematical summary, each problem and improvement with its effect on ROAS and its role (positive, adverse or offsetting), and the playbook's causes and checks. Only totals and playbook text are sent, never CSV rows, campaign names or file names.
+
+It may return:
+
+- an order for the playbook's causes, with a short explanation of each
+- an order for the playbook's checks, with a short explanation of each
+- how several problems might relate, when there is more than one
+- guidance for each action, which must start with "If" and depend on what the checks show
+
+It can't add causes, checks or findings. The reply may only use the cause and check IDs it was given, and any internal name it writes is replaced with the readable title.
+
+`funnel_magnet/ai/prioritise.py` withholds any explanation that:
+
+- states a number that isn't in the evidence
+- presents a cause as fact, for example "caused", "drove" or "due to" without "may" or "could"
+- says ROAS or a KPI moved the opposite way to the calculation, for example "the ROAS decline" when ROAS rose
+- says a check would prove or confirm a cause, rather than support or weaken it
+- claims a metric moved that isn't in the evidence, such as frequency
+- says the problems share a cause, rather than that they might
+- gives an action that isn't conditional on the checks
+
+What is withheld is listed in the AI panel and the report, and logged with the failing text under the `funnel_magnet.ai.review` logger for development review. The log holds only the AI's wording, never data rows, campaign names or keys.
+
+A funnel problem always keeps a tracking check in the top three, whatever the AI suggests. If the model fails, times out, reaches a usage limit or returns nothing usable, the page says so and the diagnosis stays as it was.
+
+### Usage limits
+
+Each browser session allows 3 AI analyses, and the page shows how many are left. A failed request counts too. Every visitor also shares one allowance of one request a minute and 25 a day. One request uses up to about 6,000 tokens, so this stays inside Groq's published free-plan limits of 8,000 tokens a minute and 200,000 a day. Check your own organisation's limits on Groq's Limits page.
+
+These counters are held in the app's memory. A restart, a redeployment or the app going to sleep resets them, and a reloaded page is a new session with 3 analyses again. They reduce use but are not a guaranteed usage or billing cap. When Groq itself refuses a request because of its limits, the app shows the suggested wait and does not retry.
+
+### Set up Groq
+
+Groq is the provider tested with prioritisation, using `openai/gpt-oss-120b`.
 
 1. Create a key in GroqCloud.
 2. Store it as a Windows user environment variable named `GROQ_API_KEY`: open **Edit environment variables for your account**, add the variable, then restart the app. This keeps the key out of synced folders and shell history. Alternatively, add it to `.streamlit/secrets.toml`, which Git ignores.
 3. Add `AI_PROVIDER = "groq"` and `FM_AI_ENABLED = "true"` to `.streamlit/secrets.toml`.
 
+Groq requests use strict structured output, low reasoning effort and at most 3,000 completion tokens. A rate-limited request is not retried, and the message gives Groq's suggested wait. Groq checks the reply format after generating, so it can refuse a reply. The app then reads the refused reply and applies every usual check.
+
+In a shared deployment, Groq is available only behind the tester sign-in described above.
+
+### Gemini
+
+Gemini remains available with `AI_PROVIDER = "gemini"` and `GEMINI_API_KEY`. It hasn't been tested live with prioritisation.
+
+Google's Gemini API terms require paid use for an app made available to users in the EEA, Switzerland or the UK. Before sharing the app with those users, enable billing and set `GEMINI_TIER = "paid"` and `FM_SHARED_DEPLOYMENT = "true"`. These settings don't check billing, so confirm it in Google's console. Don't send real client data through the free tier.
+
 | Setting | Default | Purpose |
 |---|---|---|
+| `FM_AI_ENABLED` | `false` | Must be `true` before any live AI call is possible |
 | `AI_PROVIDER` | `gemini` | `gemini` or `groq` |
 | `GROQ_API_KEY` | None | Server-side Groq key |
 | `GROQ_MODEL` | `openai/gpt-oss-120b` | Groq model name |
+| `GEMINI_API_KEY` | None | Server-side Gemini key |
+| `GEMINI_MODEL` | `gemini-3.1-flash-lite` | Gemini model name |
+| `GEMINI_TIER` | `free` | Set to `paid` once the Google project has billing enabled |
+| `FM_SHARED_DEPLOYMENT` | `false` | Set to `true` for a shared app. It then needs a tester password, Groq works only behind it, and Gemini needs `GEMINI_TIER = "paid"`. |
+| `FM_ACCESS_PASSWORD` | None | Shared tester password, at least 12 characters. Setting it turns on the sign-in. |
 
-Groq requests use strict structured output, low reasoning effort and at most 3,000 completion tokens. Groq counts requested tokens against its per-minute limit, which is 8,000 tokens on the free plan, so roughly one diagnosis a minute fits. A rate-limited request is not retried, and the message gives Groq's suggested wait.
-
-The schema sent with each request lists the only allowed values: `diagnostic_node` must be a node on a diagnostic path, and `target_metric` a metric in the evidence, both by internal name. A check of page load time therefore targets `link_clicks_to_landing_page_views`. Groq checks these rules after generating rather than enforcing them, so it can refuse a reply. The app then reads the refused reply and applies every usual check, so off-path or invented content is withheld, never shown. A missing `target_metric` is filled only when the recommendation's own evidence names exactly one metric, and the fill is listed under "Adjusted by the app".
-
-A check labelled as using the uploaded data is relabelled as external when it needs data a Meta export doesn't have, such as page load times, redesign records, checkout logs or order-level data. Only genuine repeats of the app's own two-period comparison are withheld.
-
-Groq stays off in a shared deployment until its terms and limits have been reviewed.
-
-### Free and paid use
-
-Google's Gemini API terms require paid use for an app made available to users in the EEA, Switzerland or the UK. Use the free tier for local development only. Before sharing the app with those users, enable billing on the Google project and set `GEMINI_TIER = "paid"` and `FM_SHARED_DEPLOYMENT = "true"`. These settings don't check billing, so confirm it in Google's console.
-
-Google's free-tier terms differ from its paid terms on how data may be used, so don't send real client data through the free tier.
-
-### What is sent and checked
-
-Python writes the mathematical diagnosis from the decision tree and contributions, and it appears with or without a key. Gemini receives that diagnosis and writes only hypotheses, recommendations, uncertainty explanations and missing-data requirements.
-
-`funnel_magnet/ai/evidence.py` builds the only input the model receives: the mathematical diagnosis, calculated metrics, drivers, tree paths, data warnings, information gaps and the checks available in the uploaded data, with fact IDs on every fact. CSV rows, campaign names and file names are never sent.
-
-`funnel_magnet/ai/validate.py` checks each section of the response. A section fails if it cites an unknown or missing fact, contains a number that isn't in the evidence, names a metric that isn't in the evidence, or presents a cause as established. Hypotheses must stay on the diagnostic path, keep mathematical evidence apart from the unverified business cause, and hold one business cause each, so "X or Y" fails. Statements that a cause is unknown, or that evidence is missing, are allowed, but campaign-level data can't be called missing when the upload has it. "If supported" and "if not supported" steps may name a possible cause, because they only apply if the check holds, and they must still pass the number, proof and definite-cause checks. Each wording problem is reported once per sentence.
-
-A section that fails is withheld, and its text is never shown. The panel is marked "Partly verified" and lists each reason. A recommendation that passes stays visible even if its hypothesis was withheld, and it is labelled as such. If no hypothesis or recommendation passes, the whole response is rejected.
-
-`funnel_magnet/ai/normalize.py` runs first and fixes harmless differences, listing each change under "Adjusted by the app":
-
-- Keeps the top three hypotheses, and renumbers hypotheses and recommendations.
-- Adds a hypothesis's own metric to its citations, and marks an unhedged business cause as possible.
-- Lowers confidence to low unless a hypothesis cites a separate lowest-level metric that moved materially, and forces low when purchase volume is low.
-- Relabels a check as external if it needs outside data, and moves checks using the uploaded data first.
-- Adds any outside data named in a recommendation, including benchmark and industry data, to the additional information needed. Next steps may lead to external checks, because that data is then disclosed.
-
-To use another provider, add a class with `generate()` to `funnel_magnet/ai/providers.py` and return it from `create_provider()` in `funnel_magnet/ai/service.py`.
+Never commit a key or share it in chat. To add a provider, add a class with `generate()` to `funnel_magnet/ai/providers.py` and return it from `create_provider()` in `funnel_magnet/ai/service.py`.
 
 ### Limitations
 
-- Automated tests use mocked responses. Response quality and acceptance rates on the live API still need testing.
-- The validator uses rules and word patterns, so it can reject a sound response or miss an unusual unsupported claim. A number that happens to match the evidence also passes.
-- The check for two causes in one hypothesis looks for the word "or", so causes joined by "and" can pass, and one cause worded with "or" is withheld. Whether actions are concrete is requested in the prompt, not enforced.
-- Rejected responses aren't retried automatically, because each attempt uses quota.
+- The checks use rules and word patterns, so they can miss an unusual unsupported claim, or withhold a sound one. A number that happens to match the evidence also passes.
+- Direction checks cover ROAS and the main KPIs by name. A direction word counts only when it sits next to the KPI, as in "CPM rose" or "higher CPM", so in "higher CPM and lower CTR" each KPI gets its own direction. "CTR may have fallen" is checked as a claim. A possible worsening of CPM, CTR or AOV after it improved, such as "saturation could lower CTR" when CTR rose, can't explain the problem and is withheld, unless it is a risk for later, such as "CTR could fall if saturation increases". ROAS, CPA, CPC and CVR are exempt, because a worsening component can pull them down even while they improve overall. Funnel stages are written too many ways to check reliably.
+- The checks can't judge whether the AI's marketing reasoning is good, only whether it states something false or unsupported.
 - AI output is a suggestion for a person to review. The app never changes an ad account.
 
 ## Diagnostic report
 
 **Download Diagnostic Report** on the dashboard saves one HTML file for the current comparison. It opens in any modern browser with no server, and it has no scripts, outside stylesheets or outside requests. Use the browser's print command to print it.
 
-`funnel_magnet/ui/report.py` builds the report from engine results and the AI result, and it calculates no metrics. All text from uploads and the model is escaped. Keys and settings are never passed to it.
+`funnel_magnet/ui/report.py` builds the report from the same diagnosis object the page shows, including any AI prioritisation, and it calculates no metrics. All text from uploads and the model is escaped. Keys and settings are never passed to it.
 
-- **No AI result:** the report is complete and factual, and says it contains no AI interpretation.
-- **Partly verified AI result:** a notice at the top discloses that content was withheld, only accepted sections appear, and a recommendation whose hypothesis was withheld is labelled.
+- **No AI:** the report is complete, and says it contains no AI interpretation.
+- **With AI:** section 5 names the provider and model, and the AI notes appear in sections B to D with their labels. If anything was withheld, a notice at the top says so.
 
 The report has no charts, so contributions appear as a table. The analysis date is the server's date.
 

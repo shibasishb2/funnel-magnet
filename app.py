@@ -1,14 +1,15 @@
 """Streamlit entry point for the Funnel Magnet diagnostic prototype."""
 
 import io
+import time
 from datetime import date
 
 import pandas as pd
 import streamlit as st
 from streamlit.errors import StreamlitSecretNotFoundError
 
-from funnel_magnet import __version__
-from funnel_magnet.ai import service
+from funnel_magnet import __version__, access, playbook
+from funnel_magnet.ai import prioritise, service
 from funnel_magnet.ai.evidence import build_evidence
 from funnel_magnet.ai.providers import AIError
 from funnel_magnet.diagnose import DEFAULT_MATERIALITY_THRESHOLD, run_diagnosis
@@ -21,6 +22,14 @@ SAMPLE_SOURCE = "Sample scenario"
 UPLOAD_SOURCE = "Upload CSV"
 ALL_CAMPAIGNS = "All campaigns"
 GRANULARITIES = {"Weekly": WEEKLY, "Monthly": MONTHLY}
+PRIVACY_NOTICE = (
+    "**Demo data only.** Upload synthetic or anonymized exports, never client data or personal "
+    "information. The file is read in this app's memory and isn't saved. AI prioritisation sends "
+    "Groq only totals and playbook text, never rows, campaign names or file names."
+)
+SESSION_LIMIT_MESSAGE = (
+    "This session has used its {limit} AI analyses. The diagnosis below is complete without AI."
+)
 
 
 # The cache is shared by every visitor, so keep it small on a public server. It is keyed
@@ -42,6 +51,7 @@ def select_source():
         st.sidebar.caption(f"Synthetic data. {sample.description}")
         return sample.name, sample.path.read_bytes()
 
+    st.sidebar.warning(PRIVACY_NOTICE)
     uploaded = st.sidebar.file_uploader("Meta Ads daily export", type=["csv"])
     return (uploaded.name, uploaded.getvalue()) if uploaded else None
 
@@ -155,58 +165,71 @@ def read_secrets():
         return {}
 
 
-def request_ai_diagnosis(evidence, settings, key):
-    """Call the model once and keep the result for this exact evidence."""
+@st.cache_resource
+def usage_limiter():
+    """One limiter for every visitor, because the AI allowance is shared."""
+    return service.UsageLimiter()
+
+
+def request_ai_priorities(marketing, evidence, settings, key):
+    """Call the model once, keep any result for this exact diagnosis, and return messages."""
     runs = st.session_state.get("ai_runs", 0)
     if runs >= service.MAX_RUNS_PER_SESSION:
-        st.warning("The AI request limit for this session has been reached.")
-        return
+        return [("warning", SESSION_LIMIT_MESSAGE.format(limit=service.MAX_RUNS_PER_SESSION))]
+    blocked = usage_limiter().acquire()
+    if blocked:
+        return [("warning", blocked)]
 
     st.session_state["ai_runs"] = runs + 1
     try:
-        with st.spinner("Generating AI diagnosis..."):
-            result = service.generate_diagnosis(evidence, service.create_provider(settings))
+        with st.spinner("Prioritising with AI..."):
+            result = prioritise.prioritise(marketing, evidence, service.create_provider(settings))
     except AIError as error:
-        st.error(f"{error} The calculations on this page are not affected.")
-        for issue in getattr(error, "issues", []):
-            st.caption(f"Rejected: {issue}")
-        return
+        messages = [("error", f"{error} The diagnosis below is complete without AI.")]
+        return messages + [("caption", f"Withheld: {issue}") for issue in getattr(error, "issues", [])]
     st.session_state.setdefault("ai_results", {})[key] = result
+    return []
 
 
-def show_ai_diagnosis(evidence, assessable):
-    st.subheader("AI diagnosis")
+def show_ai_priorities(marketing, evidence, assessable):
+    """Offer AI prioritisation, and return the diagnosis with it when there is a result."""
     settings = service.load_settings(read_secrets())
-    key = f"{settings.provider}:{settings.model}:{evidence.fingerprint()}"
-    results = st.session_state.get("ai_results", {})
-
     unavailable = settings.unavailable_reason
     if not assessable:
-        unavailable = "AI analysis needs a ROAS comparison, which isn't possible for these periods."
+        unavailable = "AI prioritisation needs a ROAS comparison, which isn't possible for these periods."
+    elif not marketing.causes:
+        unavailable = "There are no possible causes to prioritise for this comparison."
     if unavailable:
-        st.info(unavailable)
+        # A button that can never work would look broken, so show only the reason.
+        st.caption(unavailable)
+        return marketing
 
-    # Streamlit reruns this script on every change, so only a click may call the model.
-    clicked = st.button(
-        "Generate AI Diagnosis", type="primary", disabled=bool(unavailable), key="generate-ai"
-    )
+    key = f"{settings.provider}:{settings.model}:{evidence.fingerprint()}:{code_version()}"
+    feedback = st.session_state.pop("ai_feedback", None)
+    if feedback and feedback[0] == key:
+        for kind, text in feedback[1]:
+            getattr(st, kind)(text)
+
+    left = service.MAX_RUNS_PER_SESSION - st.session_state.get("ai_runs", 0)
+    if key in st.session_state.get("ai_results", {}):
+        return st.session_state["ai_results"][key]
+    if left <= 0:
+        # The button would do nothing more, so show only the reason.
+        st.caption(SESSION_LIMIT_MESSAGE.format(limit=service.MAX_RUNS_PER_SESSION))
+        return marketing
+    if st.button("Prioritise with AI", type="primary", key="prioritise-ai"):
+        # Draw the page again with the outcome, so the count and button are never stale.
+        st.session_state["ai_feedback"] = (key, request_ai_priorities(marketing, evidence, settings, key))
+        st.rerun()
     st.caption(
-        "Sends only the aggregated evidence below. Raw rows and campaign names are never sent, "
-        "and nothing changes in your ad account."
+        "The AI orders and explains the playbook's causes and checks. It can't add findings. "
+        "Only totals and the playbook items are sent, never rows or campaign names, and nothing "
+        f"changes in your ad account. AI analyses left in this session: {left} of "
+        f"{service.MAX_RUNS_PER_SESSION}."
     )
-    if not settings.unavailable_reason and settings.usage_note:
+    if settings.usage_note:
         st.caption(settings.usage_note)
-
-    if clicked and key not in results:
-        request_ai_diagnosis(evidence, settings, key)
-
-    result = st.session_state.get("ai_results", {}).get(key)
-    if result:
-        st.html(render.ai_diagnosis_html(result, evidence))
-
-    with st.expander("Evidence available to the AI"):
-        st.json(evidence.payload(), expanded=False)
-    return result
+    return marketing
 
 
 def show_report_button(report_input):
@@ -241,8 +264,18 @@ def show_dashboard(result, diagnosis, source_name, settings):
             "The figures below show what is available."
         )
 
-    st.subheader("Mathematical diagnosis")
-    st.html(render.mathematical_diagnosis_html(view.mathematical_diagnosis(diagnosis, currency)))
+    # One diagnosis object feeds both the page and the report, so they can't disagree.
+    real_campaigns = set(result.data["campaign"]) - {ACCOUNT_LEVEL_CAMPAIGN}
+    periods = list_complete_periods(result.data, settings["granularity"])
+    marketing = playbook.build(
+        diagnosis,
+        currency,
+        several_campaigns=not single_campaign and len(real_campaigns) > 1,
+        earlier_periods=any(period.end < settings["prior_period"].start for period in periods),
+    )
+
+    st.subheader("Marketing diagnosis")
+    st.html(render.confirmed_findings_html(marketing))
 
     st.subheader("KPI overview")
     st.html(render.kpis_html(view.kpi_cards(diagnosis, currency), prior_label, current_label))
@@ -254,11 +287,16 @@ def show_dashboard(result, diagnosis, source_name, settings):
     )
     st.html(render.tree_html(view.build_tree(diagnosis, currency)))
 
-    st.subheader("Findings")
-    st.html(render.findings_html(view.build_findings(diagnosis, currency)))
-
     show_contributions(diagnosis)
-    ai_result = show_ai_diagnosis(evidence, diagnosis.assessable)
+
+    st.subheader("Possible causes, checks and actions")
+    marketing = show_ai_priorities(marketing, evidence, diagnosis.assessable)
+    if marketing.ai:
+        st.html(render.ai_status_html(marketing.ai))
+    st.html(render.possible_causes_html(marketing))
+    st.html(render.investigations_html(marketing))
+    st.html(render.actions_html(marketing))
+
     show_data_quality(result.warnings, diagnosis)
 
     dates = result.data["date"]
@@ -275,9 +313,50 @@ def show_dashboard(result, diagnosis, source_name, settings):
                 analysis_date=date.today(),
                 currency=currency,
                 load_warnings=tuple(issue.message for issue in result.warnings),
-                ai_result=ai_result,
+                marketing=marketing,
             )
         )
+
+
+def sign_out():
+    st.session_state.clear()
+
+
+def require_sign_in():
+    """Stop the page unless this visitor may use the app. Return True when signed in."""
+    secrets = read_secrets()
+    if not access.required(secrets, service.load_settings(secrets).shared_deployment):
+        return False
+    password = access.configured_password(secrets)
+    if password is None:
+        # A shared deployment never opens without a usable password.
+        st.error(access.NOT_CONFIGURED_MESSAGE)
+        st.stop()
+    if st.session_state.get("signed_in"):
+        st.sidebar.button("Sign out", on_click=sign_out, key="sign-out")
+        return True
+
+    st.subheader("Tester sign-in")
+    st.write(
+        "This demonstration is open to authorised testers only. Use synthetic or anonymized "
+        "advertising data. This is prototype access control, not production user authentication."
+    )
+    attempts = st.session_state.get("sign_in_attempts", 0)
+    if attempts >= access.MAX_ATTEMPTS:
+        st.error("Too many incorrect attempts in this session. Close this tab and try again later.")
+        st.stop()
+    with st.form("sign-in"):
+        candidate = st.text_input("Tester password", type="password")
+        submitted = st.form_submit_button("Sign in", type="primary")
+    if submitted:
+        if access.password_matches(candidate, password):
+            st.session_state["signed_in"] = True
+            st.rerun()
+        st.session_state["sign_in_attempts"] = attempts + 1
+        # A short pause slows repeated guessing.
+        time.sleep(1)
+        st.error("That password isn't right.")
+    st.stop()
 
 
 def main():
@@ -285,6 +364,7 @@ def main():
     st.html(render.style_tag())
     st.html(render.header_html())
     st.info(view.DECISION_SUPPORT_NOTICE)
+    require_sign_in()
 
     selected = select_source()
     st.sidebar.header("Data settings")

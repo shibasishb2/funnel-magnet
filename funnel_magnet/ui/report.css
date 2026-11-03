@@ -106,3 +106,6 @@ footer { border-top: 1px solid var(--line); color: var(--muted); font-size: 0.8r
   h2, h3 { break-after: avoid; }
   .table-wrap { overflow: visible; }
 }
+.alert.pattern { background: var(--soft); border-color: var(--ink); }
+.card.priority { border-left: 4px solid var(--ink); }
+.ai-note { border-left: 3px dashed var(--muted); padding-left: 8px; }

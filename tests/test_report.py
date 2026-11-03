@@ -4,11 +4,11 @@ import json
 import re
 from datetime import date
 from html import escape, unescape
-from pathlib import Path
 
 import pytest
 
-from funnel_magnet.ai import service
+from funnel_magnet import playbook
+from funnel_magnet.ai import prioritise
 from funnel_magnet.ai.evidence import build_evidence
 from funnel_magnet.ai.providers import ProviderResponse
 from funnel_magnet.diagnose import diagnose_totals, run_diagnosis
@@ -18,7 +18,6 @@ from funnel_magnet.sources.meta import load_meta_csv
 from funnel_magnet.ui import report, view
 
 SAMPLES = view.load_samples()
-FIXTURE = Path(__file__).parent / "fixtures" / "live_response_final_cpm_inflation.json"
 FAKE_KEY = "AIzaFAKE-test-only-key"
 
 
@@ -33,12 +32,24 @@ class FakeProvider:
         return ProviderResponse(self.text, 10, 20)
 
 
+def ai_reply(rationale="Auction competition may have raised delivery costs."):
+    """A valid AI prioritisation for the CPM inflation scenario."""
+    return json.dumps({
+        "cause_priorities": [{"cause_id": "auction_competition", "rationale": rationale}],
+        "check_priorities": [{"check_id": "account_change_log", "rationale": "It could rule self-made changes in or out."}],
+        "relationship": "",
+        "action_guidance": [{"cause_id": "auction_competition", "guidance": "If benchmarks show a market-wide rise, review bids."}],
+    })
+
+
 def report_input(index=0, granularity=WEEKLY, ai_text=None, source_name="Sample", scope="All campaigns"):
     loaded = load_meta_csv(SAMPLES[index].path)
     diagnosis = run_diagnosis(loaded.data, granularity)
     warnings = tuple(issue.message for issue in loaded.warnings)
     evidence = build_evidence(diagnosis, loaded.currency, warnings)
-    ai_result = service.generate_diagnosis(evidence, FakeProvider(ai_text)) if ai_text else None
+    marketing = None
+    if ai_text:
+        marketing = prioritise.prioritise(playbook.build(diagnosis, loaded.currency), evidence, FakeProvider(ai_text))
     return report.ReportInput(
         diagnosis=diagnosis,
         evidence=evidence,
@@ -50,20 +61,8 @@ def report_input(index=0, granularity=WEEKLY, ai_text=None, source_name="Sample"
         analysis_date=date(2026, 11, 2),
         currency=loaded.currency,
         load_warnings=warnings,
-        ai_result=ai_result,
+        marketing=marketing,
     )
-
-
-def full_reply():
-    reply = json.loads(FIXTURE.read_text("utf-8"))
-    reply["hypotheses"][0]["unverified_business_cause"] = "CPM may have risen with market competition."
-    reply["hypotheses"][1]["unverified_business_cause"] = "Spend may have moved toward costlier campaigns."
-    reply["confidence_explanation"] = "Confidence is low because campaign results have not been checked yet."
-    return json.dumps(reply)
-
-
-def partial_reply():
-    return FIXTURE.read_text("utf-8")
 
 
 def row_cells(html, metric):
@@ -138,12 +137,15 @@ def test_every_required_section_is_present(index):
         "Analysis date",
         "02 November 2026",
         "Campaign or account",
-        "Mathematical diagnosis",
-        "Confirmed Observations",
-        "Mathematical Drivers",
+        "1. A. Confirmed findings",
+        "2. B. Possible causes",
+        "3. C. What to investigate",
+        "4. D. Potential actions",
+        "KPI comparison",
+        "Mathematical drivers",
         "Conversion funnel",
-        "AI Hypotheses",
-        "Data quality and missing information",
+        "AI interpretation",
+        "Data quality",
         "Methodology and limitations",
         "Metric definitions",
         "Spend ÷ impressions × 1,000",
@@ -151,12 +153,14 @@ def test_every_required_section_is_present(index):
         assert text in html
 
 
-def test_warnings_and_information_needs_are_included():
+def test_warnings_and_investigations_are_included():
     item = report_input()
     html = report.build_report(item)
 
-    for text in [*item.diagnosis.warnings, *item.diagnosis.data_needed]:
+    for text in item.diagnosis.warnings:
         assert escape(view.humanize(text)) in html
+    for check in item.sections.investigations:
+        assert escape(check.detail) in html
 
 
 # AI cases
@@ -167,69 +171,9 @@ def test_no_ai_report_is_complete_and_factual():
 
     assert "contains no AI interpretation" in html
     assert "Not included" in html
-    assert "Mathematical Drivers" in html
+    assert "Mathematical drivers" in html
     assert "6. Data quality" in html and "7. Methodology" in html
     assert "Partly verified" not in html
-
-
-def test_full_ai_report_shows_every_section_with_evidence_and_model():
-    item = report_input(ai_text=full_reply())
-    html = report.build_report(item)
-
-    assert item.ai_result.withheld == []
-    assert "Partly verified" not in html
-    assert "Fake fake-model" in html
-    assert "Hypothesis 1" in html and "Hypothesis 2" in html
-    assert "CPM by campaign for the current and prior period." in html
-    assert '<div class="evidence-title">Evidence</div>' in html
-    assert "CPM contributed -0.64" in html
-    assert "(withheld)" not in html
-    assert "7. Data quality" in html and "8. Methodology" in html
-
-
-def test_partial_ai_report_discloses_and_labels_withheld_content():
-    html = report.build_report(report_input(ai_text=partial_reply()))
-
-    assert html.index("Partly verified AI content") < html.index("1. Mathematical diagnosis")
-    assert "Partly verified, some content withheld" in html
-    assert "Hypothesis 1 combines more than one business cause." in html
-    assert "Tests hypothesis 1 (withheld)" in html and "Tests hypothesis 2 (withheld)" in html
-    assert html.count("not a validated conclusion") == 2
-    assert "No AI hypothesis passed the evidence checks." in html
-
-
-def test_partial_ai_report_leaves_out_rejected_text():
-    html = report.build_report(report_input(ai_text=partial_reply()))
-
-    for text in ("heightened market competition", "expensive audiences", "campaign-level splits"):
-        assert text not in html
-
-
-@pytest.mark.parametrize("reply", [None, full_reply(), partial_reply()], ids=["none", "full", "partial"])
-def test_every_report_says_it_is_decision_support(reply):
-    assert view.DECISION_SUPPORT_NOTICE in report.build_report(report_input(ai_text=reply))
-
-
-def test_withheld_links_never_read_as_verified():
-    html = report.build_report(report_input(ai_text=partial_reply()))
-
-    assert "Tests hypothesis 1</div>" not in html
-    assert "Tests hypothesis 2</div>" not in html
-    assert "Passed the automated evidence checks" not in html
-
-
-def test_ai_information_needs_are_labelled_as_ai_suggested():
-    html = report.build_report(report_input(ai_text=partial_reply()))
-
-    assert "AI-suggested. Evidence: G1" in html
-
-
-def test_four_kinds_of_content_have_distinct_labels():
-    html = report.build_report(report_input(ai_text=full_reply()))
-
-    for kind in ("confirmed", "driver", "hypothesis", "recommendation"):
-        assert f'class="tag tag-{kind}"' in html
-        assert f'<section class="{kind}">' in html
 
 
 # Undefined results
@@ -254,13 +198,46 @@ def test_zero_spend_report_is_complete_and_says_ratios_are_undefined():
 # Safety
 
 
+def test_warning_text_is_escaped():
+    item = report_input()
+    html = report.build_report(
+        report.ReportInput(**{**item.__dict__, "load_warnings": ("<b>bad</b>",)})
+    )
+
+    assert "<b>bad</b>" not in html
+
+
+def test_file_name_uses_only_the_period_label():
+    assert report.file_name(report_input().diagnosis) == "funnel-magnet-report-2026-W35.html"
+
+
+# Safety and AI content
+
+
+@pytest.mark.parametrize("reply", [None, ai_reply()], ids=["none", "ai"])
+def test_every_report_says_it_is_decision_support(reply):
+    assert view.DECISION_SUPPORT_NOTICE in report.build_report(report_input(ai_text=reply))
+
+
+def test_report_shows_ai_priorities_with_their_labels():
+    html = report.build_report(report_input(ai_text=ai_reply()))
+
+    assert "5. AI prioritisation" in html and "Prioritised by Fake fake-model" in html
+    assert "Auction competition may have raised delivery costs." in html
+    assert "AI guidance, conditional" in html
+    assert "contains no AI interpretation" not in html
+
+
+def test_withheld_ai_content_is_disclosed_at_the_top():
+    html = report.build_report(report_input(ai_text=ai_reply("Auction competition caused the rise in CPM.")))
+
+    assert html.index("Some AI content was withheld") < html.index("1. A. Confirmed findings")
+    assert "Auction competition caused the rise" not in html
+
+
 def test_uploaded_and_ai_text_is_escaped():
     attack = '<script>alert("x")</script>'
-    reply = json.loads(full_reply())
-    reply["hypotheses"][0]["uncertainty"] = attack
-    reply["recommendations"][0]["what_to_check"] = attack
-    reply["additional_information"][0]["reason"] = attack
-    item = report_input(ai_text=json.dumps(reply), source_name=attack, scope=f'"><img src=x>{attack}')
+    item = report_input(ai_text=ai_reply(f"Competition may matter {attack}"), source_name=attack, scope=f'"><img src=x>{attack}')
 
     html = report.build_report(item)
 
@@ -277,7 +254,7 @@ def test_warning_text_is_escaped():
     assert "<b>bad</b>" not in html
 
 
-@pytest.mark.parametrize("reply", [None, full_reply(), partial_reply()], ids=["none", "full", "partial"])
+@pytest.mark.parametrize("reply", [None, ai_reply()], ids=["none", "ai"])
 def test_report_is_self_contained(reply):
     html = report.build_report(report_input(ai_text=reply))
 
@@ -293,12 +270,8 @@ def test_report_is_self_contained(reply):
 
 def test_keys_are_never_in_a_report(monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", FAKE_KEY)
-    html = report.build_report(report_input(ai_text=full_reply()))
+    monkeypatch.setenv("GROQ_API_KEY", FAKE_KEY)
+    html = report.build_report(report_input(ai_text=ai_reply()))
 
     assert FAKE_KEY not in html
-    assert "GEMINI_API_KEY" not in html
-    assert "AIza" not in html
-
-
-def test_file_name_uses_only_the_period_label():
-    assert report.file_name(report_input().diagnosis) == "funnel-magnet-report-2026-W35.html"
+    assert "GEMINI_API_KEY" not in html and "GROQ_API_KEY" not in html

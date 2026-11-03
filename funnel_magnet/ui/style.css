@@ -183,3 +183,18 @@
 .fm-panel ul { margin: 0; padding-left: 18px; }
 .fm-panel li { margin-bottom: 4px; }
 .fm-panel p { margin-bottom: 6px; }
+.fm-section { margin-bottom: 8px; }
+.fm-section ul { padding-left: 18px; }
+.fm-section li { margin-bottom: 6px; }
+.fm-pattern {
+  background: var(--fm-surface);
+  border-left: 4px solid var(--fm-ink);
+  border-radius: 6px;
+  margin: 8px 0;
+  padding: 8px 12px;
+}
+.fm-priority { border-left: 4px solid var(--fm-ink); }
+.fm-more { margin-top: 8px; }
+.fm-more summary { color: var(--fm-ink); cursor: pointer; font-weight: 600; padding: 4px 0; }
+.fm-ai-note { border-left: 3px dashed var(--fm-muted); padding-left: 8px; }
+.fm-ai-status { border-top: 3px dashed var(--fm-muted); }

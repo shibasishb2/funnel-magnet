@@ -4,14 +4,10 @@ from html import escape
 from pathlib import Path
 
 from funnel_magnet.diagnose import Status
-from funnel_magnet.ui.view import STATUS_LABELS, metric_label
+from funnel_magnet.ui.view import STATUS_LABELS
 
 STYLE_PATH = Path(__file__).with_name("style.css")
 
-WITHHELD_LINK_WARNING = (
-    "The hypothesis behind this check failed the evidence checks and is withheld. Treat this as "
-    "a suggested check, not a validated conclusion."
-)
 
 STATUS_CLASSES = {
     Status.IMPROVED: "better",
@@ -92,141 +88,150 @@ def _items(lines):
     return "".join(f"<li>{escape(line)}</li>" for line in lines)
 
 
-def _citations(ids, evidence):
-    known = evidence.by_id
-    items = "".join(
-        f"<li><strong>{escape(item)}</strong> {escape(known[item].statement)}</li>" for item in ids
-    )
-    return f'<details class="fm-evidence"><summary>Evidence: {escape(", ".join(ids))}</summary><ul>{items}</ul></details>'
+# The four-part marketing diagnosis. The report renders the same MarketingDiagnosis.
 
 
-def _hypothesis_html(item, evidence):
+def _move_html(move):
+    extra = [f"Path: {move.path}"]
+    if move.contribution:
+        extra.append(f"Effect on ROAS: {move.contribution}" + (f" ({move.effect.lower()})" if move.effect else ""))
     return (
-        '<article class="fm-ai-card">'
-        f'<div class="fm-ai-card-tag">Hypothesis {item.rank} · {escape(item.confidence.capitalize())} confidence</div>'
-        f"<p><strong>Mathematical evidence:</strong> {escape(item.mathematical_evidence)}</p>"
-        f"<p><strong>Unverified business cause:</strong> {escape(item.unverified_business_cause)}</p>"
-        f'<p class="fm-panel-note">Uncertainty: {escape(item.uncertainty)}</p>'
-        f"{_citations(item.evidence_ids, evidence)}"
-        "</article>"
+        f"<li><strong>{escape(move.change)}</strong>"
+        f'<div class="fm-panel-note">{escape(". ".join(extra))}.</div></li>'
     )
 
 
-def _recommendation_html(item, evidence, shown_ranks):
-    direction = {
-        "increase": "Increase",
-        "decrease": "Decrease",
-        "stabilize": "Stabilize",
-        "unclear": "Unclear",
-    }[item.expected_direction]
-    source = "Uploaded data" if item.check_source == "uploaded_data" else "External data"
-    withheld = item.hypothesis_rank not in shown_ranks
-    link = f"Tests hypothesis {item.hypothesis_rank}" + (" (withheld)" if withheld else "")
-    warning = f'<p class="fm-ai-link-warning">{WITHHELD_LINK_WARNING}</p>' if withheld else ""
+def confirmed_findings_html(marketing):
+    problems = "".join(_move_html(move) for move in marketing.problems)
+    beneficial = "".join(_move_html(move) for move in marketing.beneficial)
     return (
-        '<article class="fm-ai-card">'
-        f'<div class="fm-ai-card-tag">Priority {item.priority} · {source} · {link}</div>{warning}'
-        f"<p><strong>{escape(item.investigation)}</strong></p>"
-        f"<p><strong>What to check:</strong> {escape(item.what_to_check)}</p>"
-        f"<p><strong>If supported:</strong> {escape(item.if_supported)}</p>"
-        f"<p><strong>If not supported:</strong> {escape(item.if_not_supported)}</p>"
-        f'<p class="fm-panel-note">Expected direction for {escape(metric_label(item.target_metric))}: '
-        f"{direction}. {escape(item.expected_impact)}</p>"
-        f"{_citations(item.evidence_ids, evidence)}"
-        "</article>"
-    )
-
-
-def _information_html(items, evidence):
-    if not items:
-        return ""
-    rows = "".join(
-        f"<article class=\"fm-ai-card\"><p><strong>{escape(item.information)}</strong> "
-        f"{escape(item.reason)}</p>{_citations(item.evidence_ids, evidence)}</article>"
-        for item in items
-    )
-    return f'<div class="fm-ai-heading">Additional information needed</div>{rows}'
-
-
-def _adjustments_html(notes):
-    if not notes:
-        return ""
-    return (
-        '<div class="fm-ai-heading">Adjusted by the app</div>'
-        f'<ul class="fm-panel-note">{_items(notes)}</ul>'
-    )
-
-
-def _withheld_html(issues):
-    if not issues:
-        return ""
-    return (
-        '<div class="fm-ai-withheld" role="alert">'
-        "<strong>Partly verified.</strong> Some AI sections failed the evidence checks and are "
-        f"withheld. Only the sections shown here passed.<ul>{_items(issues)}</ul></div>"
-    )
-
-
-def ai_diagnosis_html(result, evidence):
-    diagnosis = result.diagnosis
-    shown_ranks = {item.rank for item in diagnosis.hypotheses}
-    hypotheses = "".join(_hypothesis_html(item, evidence) for item in diagnosis.hypotheses)
-    recommendations = "".join(
-        _recommendation_html(item, evidence, shown_ranks) for item in diagnosis.recommendations
-    )
-    explanation = diagnosis.confidence_explanation
-    return (
-        '<section class="fm-ai">'
-        f'<div class="fm-panel-tag">AI-generated · {escape(result.provider)} {escape(result.model)}</div>'
-        '<p class="fm-panel-note">Interpretation of the calculated evidence. Causes are not confirmed, '
-        "and every action is a suggestion for you to review.</p>"
-        + _withheld_html(result.withheld)
-        + (f'<div class="fm-ai-heading">AI-generated hypotheses</div>{hypotheses}' if hypotheses else "")
-        + (
-            f'<div class="fm-ai-heading">AI-generated recommendations</div>{recommendations}'
-            if recommendations
-            else ""
-        )
-        + _information_html(diagnosis.additional_information, evidence)
-        + (
-            f'<div class="fm-ai-heading">Confidence and uncertainty</div><p>{escape(explanation)}</p>'
-            if explanation
-            else ""
-        )
-        + _adjustments_html(result.notes)
-        + "</section>"
-    )
-
-
-def mathematical_diagnosis_html(sentences):
-    return (
-        '<section class="fm-panel fm-confirmed">'
-        '<div class="fm-panel-tag">Calculated by Python</div>'
-        f"<p>{escape(' '.join(sentences))}</p>"
+        '<section class="fm-panel fm-confirmed fm-section">'
+        '<div class="fm-panel-tag">A. Confirmed findings · Calculated by Python</div>'
+        f"<p>{escape(' '.join(marketing.summary))}</p>"
+        '<div class="fm-ai-heading">KPIs that worsened materially</div>'
+        + (f"<ul>{problems}</ul>" if problems else "<p>No final KPI worsened by the threshold or more.</p>")
+        + '<div class="fm-ai-heading">KPIs that improved materially</div>'
+        + (f"<ul>{beneficial}</ul>" if beneficial else "<p>No final KPI improved by the threshold or more.</p>")
+        + '<p class="fm-panel-note">Improvements are reported as calculated, with no causes suggested.</p>'
         "</section>"
     )
 
 
-def findings_html(findings):
-    needed = (
-        f"<p>Evidence needed before naming a cause:</p><ul>{_items(findings.evidence_needed)}</ul>"
-        if findings.evidence_needed
-        else "<p>No further evidence is requested for this comparison.</p>"
+def _ai_note(label, text):
+    return f'<p class="fm-ai-note"><strong>{label}:</strong> {escape(text)}</p>' if text else ""
+
+
+def ai_status_html(ai):
+    withheld = (
+        '<div class="fm-panel-note">Withheld because they failed the checks:</div>'
+        f'<ul class="fm-panel-note">{_items(ai.withheld)}</ul>'
+        if ai.withheld
+        else ""
+    )
+    relationship = (
+        f"<p><strong>How the problems might relate (AI, unconfirmed):</strong> {escape(ai.relationship)}</p>"
+        if ai.relationship
+        else ""
     )
     return (
-        '<div class="fm-findings">'
-        '<section class="fm-panel fm-confirmed">'
-        '<div class="fm-panel-tag">Confirmed observations</div>'
-        '<p class="fm-panel-note">Calculated from your data.</p>'
-        f"<ul>{_items(findings.observations)}</ul></section>"
-        '<section class="fm-panel fm-confirmed">'
-        '<div class="fm-panel-tag">Mathematical drivers</div>'
-        '<p class="fm-panel-note">How the ROAS arithmetic changed, not why.</p>'
-        f"<ul>{_items(findings.drivers)}</ul></section>"
-        '<section class="fm-panel fm-hypotheses">'
-        '<div class="fm-panel-tag">Hypotheses</div>'
-        '<p class="fm-panel-note">The calculations cannot show causes. Any AI-generated hypotheses '
-        "appear only in the AI diagnosis section.</p>"
-        f"{needed}</section>"
-        "</div>"
+        '<section class="fm-panel fm-ai-status">'
+        f'<div class="fm-panel-tag">AI prioritisation · {escape(ai.provider)} {escape(ai.model)}</div>'
+        '<p class="fm-panel-note">The AI reordered and explained the playbook items below. It added no findings, '
+        "and every cause remains unconfirmed.</p>"
+        f"{relationship}{withheld}</section>"
+    )
+
+
+def _cause_card(cause):
+    return (
+        '<article class="fm-ai-card">'
+        f'<div class="fm-ai-card-tag">{escape(cause.title)} · Could explain {escape(", ".join(cause.explains))}</div>'
+        f"<p>{escape(cause.statement)}</p>{_ai_note('Why the AI ranks it here', cause.ai_note)}</article>"
+    )
+
+
+def _more(summary, body):
+    return f'<details class="fm-more"><summary>{escape(summary)}</summary>{body}</details>'
+
+
+def possible_causes_html(marketing):
+    notes = "".join(f'<div class="fm-pattern">{escape(note)}</div>' for note in (*marketing.patterns, *marketing.component_notes))
+    shared = "".join(_cause_card(cause) for cause in marketing.shared_causes)
+    separate = "".join(_cause_card(cause) for cause in marketing.separate_causes)
+    if not (notes or marketing.causes):
+        body = "<p>No KPI worsened materially, so the playbook suggests no causes.</p>"
+    else:
+        body = notes
+        if shared:
+            body += (
+                '<div class="fm-ai-heading">Possible shared explanations</div>'
+                '<p class="fm-panel-note">Each could explain more than one problem. None is assumed.</p>'
+                f"{shared}"
+            )
+        if separate:
+            label = "Separate possible causes" if shared else "Possible causes"
+            body += _more(f"{label} ({len(marketing.separate_causes)})", separate)
+    return (
+        '<section class="fm-panel fm-hypotheses fm-section">'
+        '<div class="fm-panel-tag">B. Possible causes · From the marketing playbook, not confirmed</div>'
+        '<p class="fm-panel-note">Each is a possibility to test. The data shows what changed, not why.</p>'
+        f"{body}</section>"
+    )
+
+
+def _where(item):
+    return "In your upload" if item.available else "Collect outside this app"
+
+
+def _check_html(item):
+    return (
+        f"<li><strong>{escape(item.title)}</strong> · {_where(item)}. {escape(item.detail)}"
+        f'<div class="fm-panel-note">Helps test: {escape(", ".join(item.tests))}.</div>'
+        f"{_ai_note('AI', item.ai_note)}</li>"
+    )
+
+
+def _top_check_html(rank, item):
+    why = f"<p><strong>Why first:</strong> {escape(item.reason)}</p>" if item.reason else ""
+    return (
+        '<article class="fm-ai-card fm-priority">'
+        f'<div class="fm-ai-card-tag">Priority {rank} · {_where(item)}</div>'
+        f"<p><strong>{escape(item.title)}.</strong> {escape(item.detail)}</p>{why}"
+        f"{_ai_note('Why the AI ranks it here', item.ai_note)}"
+        f'<p class="fm-panel-note">Helps test: {escape(", ".join(item.tests))}.</p></article>'
+    )
+
+
+def investigations_html(marketing):
+    if not marketing.investigations:
+        body = "<p>Nothing needs investigating for this comparison.</p>"
+    else:
+        body = "".join(_top_check_html(rank, item) for rank, item in enumerate(marketing.top_investigations, 1))
+        others = marketing.other_investigations
+        if others:
+            body += _more(f"All other checks ({len(others)})", f"<ul>{''.join(_check_html(item) for item in others)}</ul>")
+    return (
+        '<section class="fm-panel fm-section">'
+        '<div class="fm-panel-tag">C. What to investigate · Top three first</div>'
+        f"{body}</section>"
+    )
+
+
+def actions_html(marketing):
+    cards = "".join(
+        '<article class="fm-ai-card">'
+        f'<div class="fm-ai-card-tag">{escape(action.cause)}</div>'
+        f"<p><strong>If the evidence supports this cause:</strong> {escape(action.if_supported)}</p>"
+        f"<p><strong>If it doesn't:</strong> {escape(action.if_not_supported)}</p>"
+        f"{_ai_note('AI guidance, conditional', action.ai_note)}</article>"
+        for action in marketing.actions
+    )
+    body = _more(f"Conditional actions for every cause ({len(marketing.actions)})", cards) if cards else (
+        "<p>No actions are suggested for this comparison.</p>"
+    )
+    return (
+        '<section class="fm-panel fm-section">'
+        '<div class="fm-panel-tag">D. Potential actions · Only after the checks above</div>'
+        '<p class="fm-panel-note">Nothing here is confirmed. Act only on what the investigation supports.</p>'
+        f"{body}</section>"
     )

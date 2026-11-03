@@ -1,22 +1,10 @@
 """Settings and the end-to-end AI diagnosis request."""
 
-import json
 import os
 from dataclasses import dataclass
 
-from pydantic import ValidationError
-
-from funnel_magnet.ai.normalize import normalize_diagnosis, recover_target_metrics
-from funnel_magnet.ai.prompt import SYSTEM_PROMPT, build_user_prompt
-from funnel_magnet.ai.providers import (
-    AIError,
-    AIRequestError,
-    AIResponseError,
-    GeminiProvider,
-    GroqProvider,
-)
-from funnel_magnet.ai.schema import AIDiagnosis, restricted_schema
-from funnel_magnet.ai.validate import coverage_issues, keep_valid_sections, validate_diagnosis
+from funnel_magnet import access
+from funnel_magnet.ai.providers import AIError, GeminiProvider, GroqProvider
 
 GEMINI = "gemini"
 GROQ = "groq"
@@ -28,7 +16,7 @@ KEY_SETTINGS = {GEMINI: "GEMINI_API_KEY", GROQ: "GROQ_API_KEY"}
 MODEL_SETTINGS = {GEMINI: "GEMINI_MODEL", GROQ: "GROQ_MODEL"}
 FREE_TIER = "free"
 PAID_TIER = "paid"
-MAX_RUNS_PER_SESSION = 10
+MAX_RUNS_PER_SESSION = 3
 
 AI_OFF_MESSAGE = (
     "AI analysis is switched off in this deployment. The calculations, dashboard and report "
@@ -42,14 +30,16 @@ UNKNOWN_PROVIDER_MESSAGE = (
     "AI analysis is unavailable because AI_PROVIDER isn't recognised. Use gemini or groq."
 )
 SHARED_GROQ_MESSAGE = (
-    "AI analysis is off because Groq hasn't been approved for a shared deployment yet. "
-    "Review its terms and limits first."
+    "AI analysis is off because this shared deployment has no tester sign-in. "
+    "Groq is only available to signed-in testers."
 )
 GEMINI_FREE_TIER_NOTE = (
     "Free tier: for local development only. Apps available to users in the EEA, "
     "Switzerland or the UK need paid Gemini use."
 )
-GROQ_NOTE = "Groq: for local testing only until its terms and limits are reviewed for sharing."
+GROQ_NOTE = (
+    "Groq free plan, for authorised testers of this demonstration. Use synthetic or anonymized data only."
+)
 SHARED_FREE_TIER_MESSAGE = (
     "AI analysis is off because this shared deployment isn't set to the paid tier. "
     "Google's terms require paid use for apps available to users in the EEA, Switzerland or the UK."
@@ -64,6 +54,7 @@ class AISettings:
     shared_deployment: bool
     enabled: bool = False
     provider: str = GEMINI
+    access_protected: bool = False
 
     @property
     def unavailable_reason(self):
@@ -74,9 +65,10 @@ class AISettings:
             return UNKNOWN_PROVIDER_MESSAGE
         if not self.api_key:
             return NO_KEY_MESSAGE
-        if self.shared_deployment and self.provider == GROQ:
+        # A shared deployment may use Groq only behind the tester sign-in.
+        if self.shared_deployment and self.provider == GROQ and not self.access_protected:
             return SHARED_GROQ_MESSAGE
-        if self.shared_deployment and self.tier != PAID_TIER:
+        if self.shared_deployment and self.provider == GEMINI and self.tier != PAID_TIER:
             return SHARED_FREE_TIER_MESSAGE
         return None
 
@@ -86,17 +78,6 @@ class AISettings:
         if self.provider == GROQ:
             return GROQ_NOTE
         return GEMINI_FREE_TIER_NOTE if self.tier != PAID_TIER else None
-
-
-@dataclass(frozen=True)
-class AIResult:
-    diagnosis: AIDiagnosis
-    provider: str
-    model: str
-    input_tokens: int | None
-    output_tokens: int | None
-    notes: tuple[str, ...] | list[str] = ()
-    withheld: tuple[str, ...] | list[str] = ()
 
 
 def load_settings(secrets=None):
@@ -115,6 +96,7 @@ def load_settings(secrets=None):
         shared_deployment=read("FM_SHARED_DEPLOYMENT", "false").lower() == "true",
         enabled=read("FM_AI_ENABLED", "false").lower() == "true",
         provider=provider,
+        access_protected=access.configured_password(secrets) is not None,
     )
 
 
@@ -124,48 +106,41 @@ def create_provider(settings):
     return GeminiProvider(settings.api_key, settings.model)
 
 
-def generate_diagnosis(evidence, provider):
-    """Ask the model to interpret the evidence. Only sections that pass are returned.
+__all__ = ["AIError", "AISettings", "UsageLimiter", "create_provider", "load_settings"]
 
-    The result lists what was withheld. A response with no valid hypothesis or
-    recommendation is rejected.
+
+# Groq's free plan allows about 8,000 tokens a minute and 200,000 a day, shared by every
+# visitor. One prioritisation uses up to about 6,000, so these keep the app inside both.
+AI_CALLS_PER_MINUTE = 1
+AI_CALLS_PER_DAY = 25
+
+
+class UsageLimiter:
+    """Counts AI calls across every visitor of one running app.
+
+    It lives in server memory, so a restart resets it. That is enough for a prototype,
+    but it is not a spending guarantee.
     """
-    schema = restricted_schema(evidence)
-    if schema is None:
-        # No metric could be named, so any reply would fail. Nothing is sent.
-        raise AIRequestError("AI analysis needs at least one diagnostic path and metric, and this comparison has none.")
 
-    input_tokens = output_tokens = None
-    try:
-        response = provider.generate(SYSTEM_PROMPT, build_user_prompt(evidence), schema)
-        text = response.text
-        input_tokens, output_tokens = response.input_tokens, response.output_tokens
-    except AIResponseError as error:
-        if not error.partial_text:
-            raise
-        # The provider refused the reply for its format. Recover only what the evidence
-        # settles, and let the usual checks judge the rest.
-        text = error.partial_text
+    def __init__(self, per_minute=AI_CALLS_PER_MINUTE, per_day=AI_CALLS_PER_DAY, clock=None):
+        import threading
+        import time
 
-    try:
-        reply = json.loads(text)
-    except ValueError:
-        raise AIResponseError("The AI response did not match the required format.") from None
-    reply, recovered, unrecovered = recover_target_metrics(reply, evidence)
-    try:
-        diagnosis = AIDiagnosis.model_validate(reply)
-    except ValidationError:
-        raise AIResponseError("The AI response did not match the required format.") from None
+        self.per_minute, self.per_day = per_minute, per_day
+        self._clock = clock or time.time
+        self._calls = []
+        self._lock = threading.Lock()
 
-    diagnosis, notes = normalize_diagnosis(diagnosis, evidence)
-    notes = [*recovered, *notes]
-    issues = [*unrecovered, *validate_diagnosis(diagnosis, evidence)]
-    verified = keep_valid_sections(diagnosis, evidence)
-    if issues and not (verified.hypotheses or verified.recommendations):
-        raise AIResponseError("The AI response was rejected because it failed the evidence checks.", issues)
-    issues += coverage_issues(verified, evidence)
-
-    return AIResult(verified, provider.name, provider.model, input_tokens, output_tokens, notes, issues)
-
-
-__all__ = ["AIError", "AIResult", "AISettings", "create_provider", "generate_diagnosis", "load_settings"]
+    def acquire(self):
+        """Record a call and return None, or return why it must wait."""
+        with self._lock:
+            now = self._clock()
+            self._calls = [t for t in self._calls if now - t < 86_400]
+            if len(self._calls) >= self.per_day:
+                return "The shared AI allowance for today has been used. The diagnosis above is complete without it."
+            recent = [t for t in self._calls if now - t < 60]
+            if len(recent) >= self.per_minute:
+                wait = int(60 - (now - min(recent))) + 1
+                return f"The shared AI allowance is busy. Please try again in about {wait} seconds."
+            self._calls.append(now)
+            return None

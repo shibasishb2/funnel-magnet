@@ -9,11 +9,11 @@ from datetime import date
 from html import escape
 from pathlib import Path
 
-from funnel_magnet import __version__
+from funnel_magnet import __version__, playbook
 from funnel_magnet.ai.evidence import EvidencePack
 from funnel_magnet.diagnose import Diagnosis
 from funnel_magnet.ui import view
-from funnel_magnet.ui.render import STATUS_CLASSES, STATUS_ICONS, WITHHELD_LINK_WARNING, _items
+from funnel_magnet.ui.render import STATUS_CLASSES, STATUS_ICONS, _items
 
 STYLE_PATH = Path(__file__).with_name("report.css")
 
@@ -37,6 +37,8 @@ METHODOLOGY = (
     "reported ratios are never averaged. A metric with a zero or missing denominator is undefined.",
     "Contributions use the logarithmic mean Divisia index (LMDI), so they sum exactly to the "
     "ROAS change.",
+    "Possible causes, checks and actions come from Funnel Magnet's marketing playbook, matched to "
+    "the KPIs that worsened materially. They are possibilities to test, not findings.",
     "Python performs every calculation. Any AI content interprets those results and cites them "
     "by fact ID, and automated checks withhold the sections that fail.",
 )
@@ -49,9 +51,8 @@ LIMITATIONS = (
     "This is an ESCP MBA prototype. Use synthetic or anonymized data only.",
 )
 NO_AI_TEXT = (
-    "This report contains no AI interpretation, because none was generated or none passed the "
-    "evidence checks for this comparison. Every figure in this report is calculated by Python "
-    "and is unaffected."
+    "This report contains no AI interpretation. Sections A to D come from Python's calculations "
+    "and the marketing playbook, and are complete without it."
 )
 
 
@@ -67,7 +68,12 @@ class ReportInput:
     analysis_date: date
     currency: str | None = None
     load_warnings: tuple[str, ...] = ()
-    ai_result: object | None = None
+    # The dashboard passes the diagnosis it displayed, so the report matches it exactly.
+    marketing: playbook.MarketingDiagnosis | None = None
+
+    @property
+    def sections(self):
+        return self.marketing or playbook.build(self.diagnosis, self.currency)
 
 
 def file_name(diagnosis):
@@ -117,65 +123,50 @@ def _details_html(item):
         ("Data available", item.data_range),
         ("Materiality threshold", view.format_threshold(diagnosis.threshold)),
         ("Currency", item.currency or "Not stated"),
-        ("AI interpretation", _ai_status(item.ai_result)),
+        ("AI prioritisation", _ai_status(item.marketing)),
     )
     cells = "".join(f"<dt>{escape(name)}</dt><dd>{escape(value)}</dd>" for name, value in rows)
     return f'<dl class="details">{cells}</dl>'
 
 
-def _ai_status(result):
-    if result is None:
+def _ai_status(marketing):
+    if marketing is None or marketing.ai is None:
         return "Not included"
+    ai = marketing.ai
+    partly = ", some content withheld" if ai.withheld else ""
+    return f"Prioritised by {ai.provider} {ai.model}{partly}"
     model = f"{result.provider} {result.model}"
     if result.withheld:
         return f"Partly verified, some content withheld ({model})"
     return f"Passed the automated evidence checks ({model})"
 
 
-def _withheld_alert(result):
-    if result is None or not result.withheld:
+def _ai_alert(marketing):
+    if marketing is None or marketing.ai is None or not marketing.ai.withheld:
         return ""
     return (
-        '<div class="alert" role="alert"><strong>Partly verified AI content.</strong> Some AI '
-        "sections failed the evidence checks and are withheld from this report. It includes only "
-        "the accepted sections, and they are not validated conclusions.</div>"
+        '<div class="alert" role="alert"><strong>Some AI content was withheld.</strong> Parts of the AI '
+        "prioritisation failed the checks and are left out. Section 5 lists why.</div>"
     )
 
 
 def _legend():
     return (
         '<p class="legend">'
-        f"{_tag('confirmed', 'Confirmed Observations')} calculated from the data. "
-        f"{_tag('driver', 'Mathematical Drivers')} how the arithmetic changed, not why. "
-        f"{_tag('hypothesis', 'AI Hypotheses')} unconfirmed possible causes. "
-        f"{_tag('recommendation', 'Recommendations')} AI-suggested checks for a person to review."
+        f"{_tag('confirmed', 'A. Confirmed findings')} calculated from the data. "
+        f"{_tag('hypothesis', 'B. Possible causes')} from the playbook, not confirmed. "
+        f"{_tag('recommendation', 'C. What to investigate')} and "
+        f"{_tag('recommendation', 'D. Potential actions')} depend on what the checks find. "
+        f"{_tag('driver', 'AI')} content is labelled separately."
         "</p>"
     )
 
 
-def _diagnosis_section(item):
-    sentences = view.mathematical_diagnosis(item.diagnosis, item.currency)
-    paths = "".join(
-        f"<li>{escape(' → '.join(view.metric_label(node) for node in path))}</li>"
-        for path in item.diagnosis.paths
-    )
-    return (
-        '<section class="confirmed"><h2>1. Mathematical diagnosis</h2>'
-        f"{_tag('confirmed', 'Calculated by Python')}"
-        f"<p>{escape(' '.join(sentences))}</p>"
-        + (f"<h3>Diagnostic path followed</h3><ul>{paths}</ul>" if paths else "")
-        + "</section>"
-    )
-
-
-def _observations_section(item):
-    findings = view.build_findings(item.diagnosis, item.currency)
-    return (
-        '<section class="confirmed"><h2>2. Confirmed Observations</h2>'
-        f"{_tag('confirmed', 'Calculated from your data')}"
-        f"{_metric_table(item, view.KPI_ORDER)}"
-        f"<ul>{_items(findings.observations)}</ul></section>"
-    )
+def _move_html(move):
+    extra = [f"Path: {move.path}"]
+    if move.contribution:
+        extra.append(f"Effect on ROAS: {move.contribution}" + (f" ({move.effect.lower()})" if move.effect else ""))
+    return f'<li><strong>{escape(move.change)}</strong> <span class="note">{escape(". ".join(extra))}.</span></li>'
 
 
 def _contribution_table(diagnosis):
@@ -194,136 +185,151 @@ def _contribution_table(diagnosis):
     return _table(("Metric", "Change", "ROAS contribution", "Share of movement", "Effect on ROAS"), rows, "numbers")
 
 
-def _drivers_section(item):
-    diagnosis = item.diagnosis
+def _findings_section(item):
+    diagnosis, marketing = item.diagnosis, item.sections
+    problems = "".join(_move_html(move) for move in marketing.problems)
+    beneficial = "".join(_move_html(move) for move in marketing.beneficial)
+    paths = "".join(
+        f"<li>{escape(' → '.join(view.metric_label(node) for node in path))}</li>"
+        for path in diagnosis.paths
+    )
+    rates = view.rate_metrics(diagnosis)
     findings = view.build_findings(diagnosis, item.currency)
     return (
-        '<section class="driver"><h2>3. Mathematical Drivers</h2>'
-        f"{_tag('driver', 'How the arithmetic changed, not why')}"
-        f"<ul>{_items(findings.drivers)}</ul>"
-        + (f"<h3>Contribution analysis</h3>{_contribution_table(diagnosis)}" if diagnosis.drivers else "")
-        + f'<p class="note">{escape(diagnosis.driver_statement)}</p></section>'
+        '<section class="confirmed"><h2>1. A. Confirmed findings</h2>'
+        f"{_tag('confirmed', 'Calculated by Python')}"
+        f"<p>{escape(' '.join(marketing.summary))}</p>"
+        "<h3>KPIs that worsened materially</h3>"
+        + (f"<ul>{problems}</ul>" if problems else "<p>No final KPI worsened by the threshold or more.</p>")
+        + "<h3>KPIs that improved materially</h3>"
+        + (f"<ul>{beneficial}</ul>" if beneficial else "<p>No final KPI improved by the threshold or more.</p>")
+        + '<p class="note">Improvements are reported as calculated, with no causes suggested.</p>'
+        + (f"<h3>Diagnostic path followed</h3><ul>{paths}</ul>" if paths else "")
+        + f"<h3>KPI comparison</h3>{_metric_table(item, view.KPI_ORDER)}"
+        + f"<ul>{_items(findings.observations)}</ul>"
+        + f"<h3>Mathematical drivers</h3><ul>{_items(findings.drivers)}</ul>"
+        + (f"{_contribution_table(diagnosis)}" if diagnosis.drivers else "")
+        + f'<p class="note">{escape(diagnosis.driver_statement)}</p>'
+        + "<h3>Conversion funnel</h3>"
+        + (
+            _metric_table(item, rates)
+            if len(rates) > 1
+            else "<p>Funnel stages between link clicks and purchases are not available in this data.</p>"
+        )
+        + "</section>"
     )
 
 
-def _funnel_section(item):
-    rates = view.rate_metrics(item.diagnosis)
-    body = (
-        _metric_table(item, rates)
-        if len(rates) > 1
-        else "<p>Funnel stages between link clicks and purchases are not available in this data.</p>"
-    )
-    return (
-        '<section class="confirmed"><h2>4. Conversion funnel</h2>'
-        f"{_tag('confirmed', 'Calculated from your data')}{body}</section>"
-    )
+def _ai_note(label, text):
+    return f'<p class="ai-note"><strong>{label}:</strong> {escape(text)}</p>' if text else ""
 
 
-def _citations(ids, evidence):
-    known = evidence.by_id
-    rows = "".join(
-        f"<li><strong>{escape(fact)}</strong> {escape(known[fact].statement)}</li>" for fact in ids
-    )
-    return f'<div class="evidence"><div class="evidence-title">Evidence</div><ul>{rows}</ul></div>'
-
-
-def _hypothesis_html(item, evidence):
-    return (
-        '<article class="card">'
-        f'<div class="card-tag">Hypothesis {item.rank} · '
-        f"{escape(item.confidence.capitalize())} confidence · Unconfirmed</div>"
-        f"<p><strong>Mathematical evidence:</strong> {escape(item.mathematical_evidence)}</p>"
-        f"<p><strong>Unverified business cause:</strong> {escape(item.unverified_business_cause)}</p>"
-        f"<p><strong>Uncertainty:</strong> {escape(item.uncertainty)}</p>"
-        f"{_citations(item.evidence_ids, evidence)}</article>"
-    )
-
-
-def _recommendation_html(item, evidence, shown_ranks):
-    source = "Uploaded data" if item.check_source == "uploaded_data" else "External data"
-    withheld = item.hypothesis_rank not in shown_ranks
-    link = f"Tests hypothesis {item.hypothesis_rank}" + (" (withheld)" if withheld else "")
-    warning = f'<p class="card-warning">{WITHHELD_LINK_WARNING}</p>' if withheld else ""
+def _cause_card(cause):
     return (
         '<article class="card">'
-        f'<div class="card-tag">Priority {item.priority} · {source} · {link}</div>{warning}'
-        f"<p><strong>{escape(item.investigation)}</strong></p>"
-        f"<p><strong>What to check:</strong> {escape(item.what_to_check)}</p>"
-        f"<p><strong>If supported:</strong> {escape(item.if_supported)}</p>"
-        f"<p><strong>If not supported:</strong> {escape(item.if_not_supported)}</p>"
-        f"<p><strong>Expected direction for {escape(view.metric_label(item.target_metric))}:</strong> "
-        f"{escape(item.expected_direction.capitalize())}. {escape(item.expected_impact)}</p>"
-        f"{_citations(item.evidence_ids, evidence)}</article>"
+        f'<div class="card-tag">{escape(cause.title)} · Could explain {escape(", ".join(cause.explains))}</div>'
+        f"<p>{escape(cause.statement)}</p>{_ai_note('Why the AI ranks it here', cause.ai_note)}</article>"
     )
 
 
-def _withheld_html(result):
-    if not result.withheld:
-        return ""
+def _where(check):
+    return "In your upload" if check.available else "Collect outside this app"
+
+
+def _causes_section(item):
+    marketing = item.sections
+    notes = "".join(f'<div class="alert pattern">{escape(note)}</div>' for note in (*marketing.patterns, *marketing.component_notes))
+    body = notes
+    if marketing.shared_causes:
+        body += (
+            "<h3>Possible shared explanations</h3>"
+            '<p class="note">Each could explain more than one problem. None is assumed.</p>'
+            + "".join(_cause_card(cause) for cause in marketing.shared_causes)
+        )
+    if marketing.separate_causes:
+        body += f"<h3>{'Separate possible causes' if marketing.shared_causes else 'Possible causes'}</h3>"
+        body += "".join(_cause_card(cause) for cause in marketing.separate_causes)
+    body = body or "<p>No KPI worsened materially, so the playbook suggests no causes.</p>"
     return (
-        '<div class="alert"><strong>Withheld content.</strong> These problems were found, and the '
-        f"affected text is not shown.<ul>{_items(result.withheld)}</ul></div>"
+        '<section class="hypothesis"><h2>2. B. Possible causes</h2>'
+        f"{_tag('hypothesis', 'From the marketing playbook · Not confirmed')}"
+        '<p class="note">Each is a possibility to test. The data shows what changed, not why.</p>'
+        f"{body}</section>"
     )
 
 
-def _hypotheses_html(result, evidence):
-    cards = "".join(_hypothesis_html(item, evidence) for item in result.diagnosis.hypotheses)
-    if cards:
-        return cards
-    if result.withheld:
-        return "<p>No AI hypothesis passed the evidence checks.</p>"
-    return "<p>This comparison needed no hypothesis.</p>"
+def _check_html(check):
+    return (
+        f"<li><strong>{escape(check.title)}</strong> · {_where(check)}. {escape(check.detail)} "
+        f'<span class="note">Helps test: {escape(", ".join(check.tests))}.</span>'
+        f"{_ai_note('AI', check.ai_note)}</li>"
+    )
 
 
-def _recommendations_html(result, evidence):
-    diagnosis = result.diagnosis
-    shown_ranks = {item.rank for item in diagnosis.hypotheses}
+def _investigations_section(item):
+    marketing = item.sections
+    if not marketing.investigations:
+        body = "<p>Nothing needs investigating for this comparison.</p>"
+    else:
+        body = "<h3>Top three investigations</h3>" + "".join(
+            '<article class="card priority">'
+            f'<div class="card-tag">Priority {rank} · {_where(check)}</div>'
+            f"<p><strong>{escape(check.title)}.</strong> {escape(check.detail)}</p>"
+            + (f"<p><strong>Why first:</strong> {escape(check.reason)}</p>" if check.reason else "")
+            + _ai_note("Why the AI ranks it here", check.ai_note)
+            + f'<p class="note">Helps test: {escape(", ".join(check.tests))}.</p></article>'
+            for rank, check in enumerate(marketing.top_investigations, 1)
+        )
+        if marketing.other_investigations:
+            body += "<h3>All other checks</h3><ul>" + "".join(_check_html(c) for c in marketing.other_investigations) + "</ul>"
+    return (
+        '<section class="recommendation"><h2>3. C. What to investigate</h2>'
+        f"{_tag('recommendation', 'Top three first')}{body}</section>"
+    )
+
+
+def _actions_section(item):
     cards = "".join(
-        _recommendation_html(item, evidence, shown_ranks) for item in diagnosis.recommendations
+        '<article class="card">'
+        f'<div class="card-tag">{escape(action.cause)}</div>'
+        f"<p><strong>If the evidence supports this cause:</strong> {escape(action.if_supported)}</p>"
+        f"<p><strong>If it doesn't:</strong> {escape(action.if_not_supported)}</p>"
+        f"{_ai_note('AI guidance, conditional', action.ai_note)}</article>"
+        for action in item.sections.actions
     )
-    return cards or "<p>This report includes no AI recommendations.</p>"
+    return (
+        '<section class="recommendation"><h2>4. D. Potential actions</h2>'
+        f"{_tag('recommendation', 'Only after the checks above')}"
+        '<p class="note">Nothing here is confirmed. Act only on what the investigation supports.</p>'
+        f"{cards or '<p>No actions are suggested for this comparison.</p>'}</section>"
+    )
+
+
+def _ai_priorities_section(ai):
+    relationship = (
+        f"<p><strong>How the problems might relate (AI, unconfirmed):</strong> {escape(ai.relationship)}</p>"
+        if ai.relationship
+        else ""
+    )
+    withheld = (
+        f"<h3>Withheld because they failed the checks</h3><ul>{_items(ai.withheld)}</ul>" if ai.withheld else ""
+    )
+    return (
+        '<section class="driver"><h2>5. AI prioritisation</h2>'
+        f"{_tag('driver', 'AI-generated · Order and explanations only')}"
+        f'<p class="note">Prioritised by {escape(ai.provider)} {escape(ai.model)}. The AI reordered and explained '
+        "the playbook items in sections B to D and added no findings. Every cause remains unconfirmed.</p>"
+        f"{relationship}{withheld}</section>"
+    )
 
 
 def _ai_sections(item):
-    result = item.ai_result
-    if result is None:
-        return (
-            '<section class="hypothesis"><h2>5. AI Hypotheses and Recommendations</h2>'
-            f"{_tag('hypothesis', 'Not included')}<p>{NO_AI_TEXT}</p></section>"
-        )
-
-    diagnosis = result.diagnosis
-    explanation = diagnosis.confidence_explanation
+    if item.marketing is not None and item.marketing.ai is not None:
+        return _ai_priorities_section(item.marketing.ai)
     return (
-        '<section class="hypothesis"><h2>5. AI Hypotheses</h2>'
-        f"{_tag('hypothesis', 'AI-generated · Causes not confirmed')}"
-        f'<p class="note">Generated by {escape(result.provider)} {escape(result.model)}.</p>'
-        f"{_withheld_html(result)}{_hypotheses_html(result, item.evidence)}"
-        + (f"<h3>Confidence and uncertainty</h3><p>{escape(explanation)}</p>" if explanation else "")
-        + "</section>"
-        '<section class="recommendation"><h2>6. Recommendations</h2>'
-        f"{_tag('recommendation', 'AI-generated · For a person to review')}"
-        f"{_recommendations_html(result, item.evidence)}"
-        + (
-            f'<h3>Adjusted by the app</h3><ul class="note">{_items(result.notes)}</ul>'
-            if result.notes
-            else ""
-        )
-        + "</section>"
+        '<section class="driver"><h2>5. AI prioritisation</h2>'
+        f"{_tag('driver', 'Not included')}<p>{NO_AI_TEXT}</p></section>"
     )
-
-
-def _needs_html(item):
-    needs = [escape(text) for text in item.diagnosis.data_needed]
-    if item.ai_result is not None:
-        needs += [
-            f"{escape(need.information)} {escape(need.reason)} "
-            f"<span class=\"note\">(AI-suggested. Evidence: {escape(', '.join(need.evidence_ids))})</span>"
-            for need in item.ai_result.diagnosis.additional_information
-        ]
-    if not needs:
-        return "<p>No further information is requested for this comparison.</p>"
-    return "<ul>" + "".join(f"<li>{need}</li>" for need in needs) + "</ul>"
 
 
 def _quality_section(item, number):
@@ -333,9 +339,8 @@ def _quality_section(item, number):
         for group, rows in view.group_warnings(messages).items()
     )
     return (
-        f"<section><h2>{number}. Data quality and missing information</h2>"
-        f"{groups or '<p>No data quality warnings for this comparison.</p>'}"
-        f"<h3>Information needed before naming a cause</h3>{_needs_html(item)}</section>"
+        f"<section><h2>{number}. Data quality</h2>"
+        f"{groups or '<p>No data quality warnings for this comparison.</p>'}</section>"
     )
 
 
@@ -354,7 +359,7 @@ def _method_section(number):
 
 def build_report(item):
     """Return the complete report as one HTML string."""
-    first_free = 6 if item.ai_result is None else 7
+    first_free = 6
     title = f"Funnel Magnet Diagnostic Report: {item.diagnosis.current_label}"
     return (
         '<!doctype html>\n<html lang="en"><head><meta charset="utf-8">'
@@ -367,9 +372,9 @@ def build_report(item):
         "<h1>Meta Ads Diagnostic Report</h1></header>"
         f"{_details_html(item)}"
         f'<p class="notice">{escape(view.DECISION_SUPPORT_NOTICE)}</p>'
-        f"{_withheld_alert(item.ai_result)}{_legend()}"
-        f"{_diagnosis_section(item)}{_observations_section(item)}{_drivers_section(item)}"
-        f"{_funnel_section(item)}{_ai_sections(item)}"
+        f"{_ai_alert(item.marketing)}{_legend()}"
+        f"{_findings_section(item)}{_causes_section(item)}{_investigations_section(item)}"
+        f"{_actions_section(item)}{_ai_sections(item)}"
         f"{_quality_section(item, first_free)}{_method_section(first_free + 1)}"
         f'<footer>Funnel Magnet version {__version__}. ESCP MBA prototype. '
         "Python calculated the figures in this report.</footer>"

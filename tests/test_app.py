@@ -9,17 +9,12 @@ import streamlit as st
 from streamlit.testing.v1 import AppTest
 
 from funnel_magnet.ai import service
-from funnel_magnet.ai.evidence import build_evidence
 from funnel_magnet.ai.providers import AIRequestError, ProviderResponse
-from funnel_magnet.diagnose import run_diagnosis
-from funnel_magnet.periods import WEEKLY
-from funnel_magnet.sources.meta import load_meta_csv
 from funnel_magnet import version
 from funnel_magnet.sources import meta
 from funnel_magnet.ui import report, view
 
 SAMPLE_NAMES = [sample.name for sample in view.load_samples()]
-CAUSAL_WORDS = ("fatigue", "because of", "caused by", "due to", "saturation", "auction pressure")
 
 HEADER = "Day,Campaign name,Amount spent (EUR),Impressions,Link clicks,Purchases,Purchases conversion value"
 
@@ -36,6 +31,7 @@ def page_text(app):
     parts = [item.value for item in app.markdown]
     parts += [item.value for item in app.caption]
     parts += [item.value for item in app.warning]
+    parts += [item.value for item in app.error]
     parts += [item.body for item in app.get("html")]
     return "\n".join(str(part) for part in parts)
 
@@ -60,7 +56,13 @@ def no_live_calls(monkeypatch):
         raise AssertionError("A test tried to create a real provider.")
 
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    for name in ("FM_ACCESS_PASSWORD", "FM_SHARED_DEPLOYMENT", "FM_AI_ENABLED", "AI_PROVIDER", "GROQ_API_KEY"):
+        monkeypatch.delenv(name, raising=False)
     monkeypatch.setattr(service, "create_provider", blocked)
+    # The usage limit is shared by every session, so each test starts with a fresh, roomy one.
+    st.cache_resource.clear()
+    real_limiter = service.UsageLimiter
+    monkeypatch.setattr(service, "UsageLimiter", lambda: real_limiter(per_minute=1000, per_day=1000))
 
 
 class CountingProvider:
@@ -85,52 +87,33 @@ def start_with_key(monkeypatch, provider):
     return app.run()
 
 
+AI_MARKER = "Auction competition may have raised delivery costs."
+
+
 def good_reply():
-    data = load_meta_csv(view.load_samples()[0].path)
-    evidence = build_evidence(run_diagnosis(data.data, WEEKLY), data.currency)
-    cpm = evidence.metric_fact_id("cpm")
+    """A valid prioritisation for the default view: CPM inflation, latest two weeks."""
     return json.dumps(
         {
-            "hypotheses": [
-                {
-                    "rank": 1,
-                    "diagnostic_node": "cpm",
-                    "mathematical_evidence": "CPM rose and accounts for most of the movement.",
-                    "unverified_business_cause": "Auction competition may have raised delivery costs.",
-                    "evidence_ids": [cpm],
-                    "confidence": "low",
-                    "uncertainty": "The data shows the change only.",
-                }
+            "cause_priorities": [
+                {"cause_id": "auction_competition", "rationale": AI_MARKER},
+                {"cause_id": "budget_bid_changes", "rationale": "A budget or bid change could also explain it."},
             ],
-            "recommendations": [
-                {
-                    "priority": 1,
-                    "hypothesis_rank": 1,
-                    "check_source": "uploaded_data",
-                    "investigation": "Compare CPM for each campaign separately.",
-                    "what_to_check": "See whether the rise appears in every campaign.",
-                    "if_supported": "Treat the rise as account-wide.",
-                    "if_not_supported": "Review settings in the affected campaign.",
-                    "target_metric": "cpm",
-                    "expected_direction": "unclear",
-                    "expected_impact": "This shows where to focus.",
-                    "evidence_ids": [cpm],
-                }
+            "check_priorities": [
+                {"check_id": "account_change_history_missing", "rationale": "Ignored, because it isn't listed."},
+                {"check_id": "account_change_log", "rationale": "It could quickly rule self-made changes in or out."},
+                {"check_id": "campaign_split", "rationale": "It shows whether the rise is account-wide."},
             ],
-            "additional_information": [
-                {
-                    "information": "Placement delivery data.",
-                    "reason": "It would show where costs changed.",
-                    "evidence_ids": [cpm],
-                }
+            "relationship": "",
+            "action_guidance": [
+                {"cause_id": "auction_competition", "guidance": "If benchmarks show a market-wide rise, review bids and timing."}
             ],
-            "confidence_explanation": "Confidence is low.",
+            "extra_checks": [],
         }
     )
 
 
 def generate_button(app):
-    return widget(app.button, "Generate AI Diagnosis")
+    return widget(app.button, "Prioritise with AI")
 
 
 def test_app_opens_on_a_sample_without_errors():
@@ -139,12 +122,11 @@ def test_app_opens_on_a_sample_without_errors():
     assert not app.exception
     assert "Funnel Magnet" in page_text(app)
     assert [item.value for item in app.subheader] == [
-        "Mathematical diagnosis",
+        "Marketing diagnosis",
         "KPI overview",
         "Diagnostic decision tree",
-        "Findings",
         "ROAS contribution",
-        "AI diagnosis",
+        "Possible causes, checks and actions",
         "Data quality",
     ]
 
@@ -156,8 +138,8 @@ def test_without_a_key_the_button_is_off_and_the_dashboard_works(monkeypatch):
 
     app = start()
 
-    assert generate_button(app).disabled
-    assert any("no API key is configured" in item.value for item in app.info)
+    assert not [button for button in app.button if button.label == "Prioritise with AI"]
+    assert any("no API key is configured" in item.value for item in app.caption)
     assert "KPI overview" in [item.value for item in app.subheader]
 
 
@@ -192,15 +174,17 @@ def test_button_shows_the_validated_diagnosis_once(monkeypatch):
     assert not app.exception
     assert provider.calls == 1
     text = page_text(app)
-    assert "AI-generated recommendations" in text
-    assert "Auction competition may have raised delivery costs." in text
+    assert "AI prioritisation" in text and "Fake fake-model" in text
+    assert AI_MARKER in text
+    assert "If benchmarks show a market-wide rise" in text
+    # The playbook's own top three moves to the AI's order.
+    assert text.index("Account change history.") < text.index("Compare each campaign separately.")
 
+    # With a result shown, there is nothing left to click for this comparison.
     app.run()
-    generate_button(app).click()
-    app.run()
-
+    assert not any(button.label == "Prioritise with AI" for button in app.button)
     assert provider.calls == 1
-    assert "Auction competition may have raised delivery costs." in page_text(app)
+    assert AI_MARKER in page_text(app)
 
 
 def test_changing_the_comparison_hides_the_old_diagnosis(monkeypatch):
@@ -208,12 +192,12 @@ def test_changing_the_comparison_hides_the_old_diagnosis(monkeypatch):
     generate_button(app).click()
     app.run()
 
-    assert "Auction competition may have raised delivery costs." in page_text(app)
+    assert AI_MARKER in page_text(app)
 
     widget(app.radio, "Period").set_value("Monthly")
     app.run()
 
-    assert "Auction competition may have raised delivery costs." not in page_text(app)
+    assert AI_MARKER not in page_text(app)
 
 
 def test_failed_request_keeps_the_dashboard_working(monkeypatch):
@@ -224,27 +208,29 @@ def test_failed_request_keeps_the_dashboard_working(monkeypatch):
     app.run()
 
     assert not app.exception
-    assert any("could not be reached" in item.value for item in app.error)
+    assert any("could not be reached" in item.value and "complete without AI" in item.value for item in app.error)
     assert "Data quality" in [item.value for item in app.subheader]
+    assert "B. Possible causes" in page_text(app) and "Priority 1" in page_text(app)
 
 
-def test_rejected_reply_is_not_displayed(monkeypatch):
+def test_reply_with_nothing_usable_is_not_displayed(monkeypatch):
     reply = json.loads(good_reply())
-    reply["hypotheses"][0]["evidence_ids"] = ["M99"]
-    reply["recommendations"] = []
+    reply["cause_priorities"] = [{"cause_id": "invented_cause", "rationale": AI_MARKER}]
+    reply["check_priorities"] = []
     app = start_with_key(monkeypatch, CountingProvider(json.dumps(reply)))
 
     generate_button(app).click()
     app.run()
 
-    assert any("failed the evidence checks" in item.value for item in app.error)
-    assert "Auction competition may have raised delivery costs." not in page_text(app)
-    assert any("M99" in item.value for item in app.caption)
+    assert any("didn't prioritise any playbook cause" in item.value for item in app.error)
+    assert AI_MARKER not in page_text(app)
+    assert any("invented_cause" in item.value for item in app.caption)
+    assert "AI prioritisation" not in page_text(app)
 
 
 def test_partly_valid_reply_flags_what_was_withheld(monkeypatch):
     reply = json.loads(good_reply())
-    reply["hypotheses"][0]["evidence_ids"] = ["M99"]
+    reply["cause_priorities"][0]["rationale"] = "Auction competition caused the rise in CPM."
     app = start_with_key(monkeypatch, CountingProvider(json.dumps(reply)))
 
     generate_button(app).click()
@@ -252,9 +238,9 @@ def test_partly_valid_reply_flags_what_was_withheld(monkeypatch):
 
     text = page_text(app)
     assert not app.exception and not app.error
-    assert "Partly verified" in text and "M99" in text
-    assert "Auction competition may have raised delivery costs." not in text
-    assert "AI-generated recommendations" in text
+    assert "Withheld because they failed the checks" in text
+    assert "Auction competition caused the rise" not in text
+    assert "It could quickly rule self-made changes in or out." in text
 
 
 def test_a_key_alone_does_not_switch_ai_on(monkeypatch):
@@ -264,8 +250,8 @@ def test_a_key_alone_does_not_switch_ai_on(monkeypatch):
     app.secrets["GEMINI_API_KEY"] = "test-only"
     app.run()
 
-    assert generate_button(app).disabled
-    assert any("switched off" in item.value for item in app.info)
+    assert not [button for button in app.button if button.label == "Prioritise with AI"]
+    assert any("switched off" in item.value for item in app.caption)
     assert provider.calls == 0
 
 
@@ -276,7 +262,8 @@ def test_public_defaults_keep_every_core_feature_working(monkeypatch):
     app = start()
 
     assert not app.exception
-    assert generate_button(app).disabled
+    assert not [button for button in app.button if button.label == "Prioritise with AI"]
+    assert not [item for item in app.expander if item.label == "Evidence available to the AI"]
     assert download_button(app)
     assert any(view.DECISION_SUPPORT_NOTICE == item.value for item in app.info)
 
@@ -359,19 +346,6 @@ def test_an_upload_rejected_by_older_code_is_read_again_after_an_update(monkeypa
     assert "account-level total" in page_text(after)
 
 
-def test_dashboard_warns_about_recommendations_on_withheld_hypotheses(monkeypatch):
-    reply = json.loads(good_reply())
-    reply["hypotheses"][0]["evidence_ids"] = ["M99"]
-    app = start_with_key(monkeypatch, CountingProvider(json.dumps(reply)))
-
-    generate_button(app).click()
-    app.run()
-
-    text = page_text(app)
-    assert "Tests hypothesis 1 (withheld)" in text
-    assert "not a validated conclusion" in text
-
-
 def test_groq_can_be_chosen_as_the_provider(monkeypatch):
     provider = CountingProvider(good_reply())
     monkeypatch.setattr(service, "create_provider", lambda settings: provider)
@@ -381,12 +355,12 @@ def test_groq_can_be_chosen_as_the_provider(monkeypatch):
     app.secrets["GROQ_API_KEY"] = "gsk_test_only"
     app.run()
 
-    assert any("Groq: for local testing only" in item.value for item in app.caption)
+    assert any("for authorised testers" in item.value for item in app.caption)
     generate_button(app).click()
     app.run()
 
     assert provider.calls == 1
-    assert "Auction competition may have raised delivery costs." in page_text(app)
+    assert AI_MARKER in page_text(app)
     assert "gsk_test_only" not in page_text(app)
 
 
@@ -425,8 +399,9 @@ def test_report_includes_the_ai_result_after_the_click(monkeypatch):
     app.run()
 
     assert not app.exception
-    assert "Auction competition may have raised delivery costs." in built[-1]
-    assert "Fake fake-model" in built[-1]
+    assert AI_MARKER in built[-1]
+    assert "5. AI prioritisation" in built[-1] and "Fake fake-model" in built[-1]
+    assert "If benchmarks show a market-wide rise" in built[-1]
 
 
 def test_report_shows_the_selected_campaign_and_period(monkeypatch):
@@ -462,20 +437,27 @@ def test_report_never_contains_the_key(monkeypatch):
     generate_button(app).click()
     app.run()
 
-    assert "Auction competition may have raised delivery costs." in built[-1]
+    assert AI_MARKER in built[-1]
     assert not any("secret-sentinel-value" in item for item in built)
 
 
 def test_session_limit_stops_further_calls(monkeypatch):
     provider = CountingProvider(error=AIRequestError("The AI service could not be reached."))
     app = start_with_key(monkeypatch, provider)
-    app.session_state["ai_runs"] = service.MAX_RUNS_PER_SESSION
+    assert "AI analyses left in this session: 3 of 3" in page_text(app)
 
-    generate_button(app).click()
-    app.run()
+    for left in (2, 1, 0):
+        generate_button(app).click()
+        app.run()
+        assert provider.calls == 3 - left
+        # A failed call still counts, and the diagnosis stays complete.
+        assert "complete without AI" in page_text(app)
+        if left:
+            assert f"AI analyses left in this session: {left} of 3" in page_text(app)
 
-    assert provider.calls == 0
-    assert any("request limit" in item.value for item in app.warning)
+    assert service.MAX_RUNS_PER_SESSION == 3
+    assert not any(button.label == "Prioritise with AI" for button in app.button)
+    assert "This session has used its 3 AI analyses" in page_text(app)
 
 
 def test_blank_cell_checkbox_starts_unchecked():
@@ -498,8 +480,10 @@ def test_every_sample_renders_in_both_period_modes(name, period):
     assert not app.exception
     assert not app.error
     text = page_text(app).lower()
-    assert "confirmed observations" in text
-    assert not [word for word in CAUSAL_WORDS if word in text]
+    for section in ("a. confirmed findings", "b. possible causes", "c. what to investigate", "d. potential actions"):
+        assert section in text
+    # Possible causes are named only in hedged playbook wording, never as findings.
+    assert not [phrase for phrase in ("because of", "caused by", "due to") if phrase in text]
 
 
 def test_defaults_to_the_latest_two_complete_periods():
@@ -623,3 +607,82 @@ def test_no_upload_prompts_the_user():
 
     assert not app.exception
     assert any("Upload a Meta Ads daily export" in item.value for item in app.info)
+
+
+# One diagnosis on the page and in the report
+
+
+def page_html(app):
+    return "\n".join(str(item.body) for item in app.get("html"))
+
+
+@pytest.mark.parametrize("name", SAMPLE_NAMES)
+def test_page_and_report_show_the_same_diagnosis(monkeypatch, name):
+    built = capture_reports(monkeypatch)
+    app = choose_sample(start(), name)
+    page, report_html = page_html(app), built[-1]
+
+    assert not app.exception
+    for section in ("A. Confirmed findings", "B. Possible causes", "C. What to investigate", "D. Potential actions"):
+        assert section in page and section in report_html
+    statements = [escape(s) for s in (
+        "Seasonal demand may have raised impression costs for this period.",
+        "Payment errors may have stopped some buyers from completing their purchase.",
+        "Sales may have shifted toward lower-priced products.",
+        "People may have seen the same ads too often, so fewer of them clicked.",
+    )]
+    for statement in statements:
+        assert (statement in page) == (statement in report_html)
+
+
+def test_upload_and_period_checks_follow_the_data(monkeypatch):
+    built = capture_reports(monkeypatch)
+    app = start()
+    # The default view is the latest two weeks of a multi-campaign sample.
+    assert "Choose each campaign in the sidebar" in page_html(app)
+    assert "Choose earlier periods in the sidebar" in page_html(app)
+
+    campaign = widget(app.selectbox, "Campaign")
+    campaign.select(campaign.options[1])
+    app.run()
+    assert "Export the report broken down by campaign" in page_html(app)
+    assert "Export the report broken down by campaign" in built[-1]
+
+    # Comparing the first period with the latest leaves no earlier period in the upload.
+    prior = widget(app.selectbox, "Prior period")
+    prior.select(prior.options[0])
+    current = widget(app.selectbox, "Current period")
+    current.select(current.options[-1])
+    app.run()
+    assert "Export a longer date range" in page_html(app)
+    assert "Export a longer date range" in built[-1]
+
+
+def test_every_sidebar_control_works(monkeypatch):
+    capture_reports(monkeypatch)
+    app = start()
+
+    widget(app.checkbox, "Blank Meta action cells mean zero").check()
+    app.run()
+    widget(app.number_input, "Materiality threshold (%)").set_value(10.0)
+    app.run()
+    for period in ("Monthly", "Weekly"):
+        widget(app.radio, "Period").set_value(period)
+        app.run()
+        for option in widget(app.selectbox, "Campaign").options:
+            widget(app.selectbox, "Campaign").select(option)
+            app.run()
+            assert not app.exception and not app.error
+            assert download_button(app)
+
+
+def test_prior_period_after_the_current_one_is_explained():
+    app = start()
+    prior = widget(app.selectbox, "Prior period")
+    prior.select(prior.options[-1])
+    current = widget(app.selectbox, "Current period")
+    current.select(current.options[0])
+    app.run()
+
+    assert not app.exception
+    assert any("prior period must end before" in item.value for item in app.error)

@@ -1,0 +1,527 @@
+# Funnel Magnet marketing playbook.
+#
+# Python matches these entries to the KPIs the diagnostic found materially worse. They are
+# starting hypotheses for a person to test, never conclusions. Edit this file to change
+# the playbook. tests/test_playbook.py checks every entry when the tests run.
+#
+# Metric names are the engine's internal names:
+#   aov, cpm, ctr, cpc, cpa, cvr, and the funnel stages
+#   link_clicks_to_landing_page_views, landing_page_views_to_add_to_carts,
+#   add_to_carts_to_checkouts_initiated, checkouts_initiated_to_purchases.
+#
+# cause.statement must be hedged with "may". cause.explains lists every KPI the cause
+# could plausibly worsen, so one cause can cover several problems. A cause with
+# only_with set appears only when that combination rule applies, and one with
+# requires = "campaigns" only when the upload has several campaigns.
+# cause.check_only_if maps an investigation to a KPI: that check is offered for the
+# cause only when that KPI is also a problem.
+#
+# investigation.source is one of:
+#   "campaigns"  available when the upload has several campaigns
+#   "periods"    available when the upload has periods before the two compared
+# These two also give unavailable_detail, shown as an external step when they are not.
+#   "external"   data that must be collected outside this app
+
+# Checks offered for any problem KPI. A change can be concentrated in one campaign or
+# be part of a longer pattern, whatever its cause.
+general_investigations = ["campaign_split", "earlier_periods"]
+
+# ---------------------------------------------------------------- Causes: CTR
+
+[[cause]]
+id = "creative_fatigue"
+title = "Creative fatigue"
+statement = "People may have seen the same ads too often, so fewer of them clicked."
+explains = ["ctr"]
+investigations = ["frequency_reach", "creative_age", "ad_level_ctr"]
+if_supported = "Refresh or rotate the most-seen creatives, and consider a frequency cap."
+if_not_supported = "Keep the current creatives and look at messaging and audience fit instead."
+
+[[cause]]
+id = "weak_messaging"
+title = "Weaker messaging or offer"
+statement = "A change in ad messaging or offer may have made the ads less compelling."
+explains = ["ctr"]
+investigations = ["ad_level_ctr", "creative_change_log"]
+if_supported = "Test new messages or offers against the current ads before replacing them."
+if_not_supported = "Keep the current messaging and check audience fit and fatigue."
+
+[[cause]]
+id = "audience_mismatch"
+title = "Audience mismatch"
+statement = "The ads may be reaching people who are less interested in the offer."
+explains = ["ctr"]
+investigations = ["audience_breakdown", "targeting_change_log"]
+if_supported = "Test tailored creatives or narrower targeting for the segments the breakdown shows still respond, and keep what performs."
+if_not_supported = "Leave targeting unchanged and look at creative factors."
+
+[[cause]]
+id = "audience_saturation"
+title = "Audience saturation"
+statement = "The available audience may be saturated, which can lower CTR and raise CPM at the same time."
+explains = ["ctr", "cpm"]
+investigations = ["frequency_reach", "audience_breakdown"]
+if_supported = "Broaden or refresh audiences, or reduce frequency, before increasing budget."
+if_not_supported = "Keep audience size as it is and check creative and auction factors."
+
+[[cause]]
+id = "creative_relevance"
+title = "Lower ad quality or relevance"
+statement = "Meta may rate the ads as less relevant, which can lower CTR and raise CPM."
+explains = ["ctr", "cpm"]
+investigations = ["relevance_rankings", "ad_level_ctr"]
+check_only_if = { ad_level_ctr = "ctr" }
+if_supported = "Pause ads ranked below average and test more relevant creative."
+if_not_supported = "Treat ad quality as unlikely and focus on auction and audience factors."
+
+# ---------------------------------------------------------------- Causes: CPM
+
+[[cause]]
+id = "auction_competition"
+title = "Auction competition"
+statement = "More advertisers may be competing for the same audiences, raising the cost of impressions."
+explains = ["cpm"]
+investigations = ["auction_benchmarks"]
+if_supported = "Review bids, budgets and timing, and diversify placements to reduce exposure to the busiest auctions."
+if_not_supported = "Look for changes in your own account, audiences or placements instead."
+
+[[cause]]
+id = "seasonality"
+title = "Seasonality"
+statement = "Seasonal demand may have raised impression costs for this period."
+explains = ["cpm"]
+investigations = ["earlier_periods", "last_year"]
+if_supported = "Plan budgets and targets around the seasonal peak rather than changing creative or targeting."
+if_not_supported = "Treat the rise as specific to this account and check other causes."
+
+[[cause]]
+id = "placement_audience_changes"
+title = "Placement or audience changes"
+statement = "A change to placements or audiences may have moved delivery to more expensive inventory, or to placements where people click less."
+explains = ["cpm", "ctr"]
+investigations = ["placement_breakdown", "targeting_change_log"]
+if_supported = "Test reverting the placement or audience settings that changed at the same time."
+if_not_supported = "Keep the current settings and look at auction and quality factors."
+
+[[cause]]
+id = "account_structure"
+title = "Account structure"
+statement = "Changes to campaign or ad set structure, such as split budgets or restarted learning, may have made delivery less efficient."
+explains = ["cpm"]
+investigations = ["campaign_split", "account_change_log"]
+if_supported = "Consolidate fragmented ad sets or restore the earlier structure, then let delivery stabilise."
+if_not_supported = "Keep the current structure and look at external factors."
+
+[[cause]]
+id = "budget_bid_changes"
+title = "Budget scaling or bid strategy"
+statement = "A budget increase or a change of bid strategy or optimisation goal may have pushed delivery into more expensive impressions."
+explains = ["cpm"]
+investigations = ["account_change_log"]
+if_supported = "Scale budgets more gradually, or test the earlier bid strategy, and watch CPM as delivery settles."
+if_not_supported = "Keep the current budget and bidding, and look at market and audience factors."
+
+# ---------------------------------------------------------------- Causes: funnel stages
+
+[[cause]]
+id = "landing_page_performance"
+title = "Landing page speed or errors"
+statement = "Slow or failing landing pages may have stopped some clicks from becoming page views."
+explains = ["link_clicks_to_landing_page_views"]
+investigations = ["page_performance"]
+if_supported = "Fix the slow or failing pages, then recheck the click-to-page-view rate."
+if_not_supported = "Treat page speed as unlikely and check tracking and ad-to-page match."
+
+[[cause]]
+id = "tracking_issue"
+title = "Tracking problem"
+statement = "A tracking or pixel problem may be undercounting events, so the stage may look worse than it is."
+explains = ["link_clicks_to_landing_page_views", "landing_page_views_to_add_to_carts", "add_to_carts_to_checkouts_initiated", "checkouts_initiated_to_purchases"]
+investigations = ["tracking_diagnostics"]
+if_supported = "Fix the tracking first, then reassess the funnel before changing anything else."
+if_not_supported = "Trust the counts and investigate the website or checkout experience."
+
+[[cause]]
+id = "ad_page_mismatch"
+title = "Ad and landing page mismatch"
+statement = "A mismatch between what the ads promise and the landing page may have made visitors leave early."
+explains = ["link_clicks_to_landing_page_views", "landing_page_views_to_add_to_carts"]
+investigations = ["ad_page_review"]
+if_supported = "Align the landing page with the ad's offer and message, or send ads to a better-matched page."
+if_not_supported = "Keep the current pages and check speed, content and price."
+
+[[cause]]
+id = "page_content"
+title = "Product page content"
+statement = "Product page content may have become less persuasive."
+explains = ["landing_page_views_to_add_to_carts"]
+investigations = ["page_engagement", "site_change_log"]
+if_supported = "Restore or test the page content that changed, such as images, copy or reviews."
+if_not_supported = "Keep the current content and check price and stock."
+
+[[cause]]
+id = "price_offer"
+title = "Price or offer"
+statement = "A less competitive price or offer may have discouraged visitors from adding to cart."
+explains = ["landing_page_views_to_add_to_carts"]
+investigations = ["price_offer_log"]
+if_supported = "Test price or offer changes on the advertised products."
+if_not_supported = "Keep pricing as it is and check page content and stock."
+
+[[cause]]
+id = "stock_availability"
+title = "Stock availability"
+statement = "Advertised products may have been out of stock or limited in sizes."
+explains = ["landing_page_views_to_add_to_carts"]
+investigations = ["stock_records"]
+if_supported = "Pause ads for unavailable products or restock them."
+if_not_supported = "Treat stock as unlikely and check content and price."
+
+[[cause]]
+id = "cart_experience"
+title = "Cart experience"
+statement = "A problem in the cart may have stopped visitors from starting checkout."
+explains = ["add_to_carts_to_checkouts_initiated"]
+investigations = ["cart_analytics", "site_change_log"]
+if_supported = "Fix the cart problem and recheck the cart-to-checkout rate."
+if_not_supported = "Check shipping costs and account requirements instead."
+
+[[cause]]
+id = "shipping_costs"
+title = "Shipping costs"
+statement = "Higher or unexpected shipping costs may have put buyers off."
+explains = ["add_to_carts_to_checkouts_initiated", "checkouts_initiated_to_purchases"]
+investigations = ["shipping_log", "site_change_log"]
+if_supported = "Show shipping costs earlier, or test lower shipping thresholds."
+if_not_supported = "Keep shipping terms and check the cart and payment steps."
+
+[[cause]]
+id = "account_requirement"
+title = "Required account or login"
+statement = "A required account or login step may have stopped visitors from starting checkout."
+explains = ["add_to_carts_to_checkouts_initiated"]
+investigations = ["checkout_steps", "site_change_log"]
+if_supported = "Offer guest checkout or simplify the login step."
+if_not_supported = "Keep the current flow and check the cart and shipping costs."
+
+[[cause]]
+id = "payment_errors"
+title = "Payment errors"
+statement = "Payment errors may have stopped some buyers from completing their purchase."
+explains = ["checkouts_initiated_to_purchases"]
+investigations = ["payment_logs"]
+if_supported = "Fix the failing payment methods with your payment provider, then recheck completed purchases."
+if_not_supported = "Treat payment errors as unlikely and check payment options and forms."
+
+[[cause]]
+id = "payment_options"
+title = "Payment options"
+statement = "Missing or changed payment options may have stopped some buyers from paying."
+explains = ["checkouts_initiated_to_purchases"]
+investigations = ["payment_logs", "site_change_log"]
+if_supported = "Restore or add the payment methods buyers expect."
+if_not_supported = "Keep the current options and check checkout usability."
+
+[[cause]]
+id = "checkout_usability"
+title = "Checkout form usability"
+statement = "Checkout forms may have become harder to complete."
+explains = ["checkouts_initiated_to_purchases"]
+investigations = ["checkout_steps", "site_change_log"]
+if_supported = "Simplify the step where most buyers drop out, then retest."
+if_not_supported = "Keep the forms and check payment and shipping."
+
+[[cause]]
+id = "traffic_quality"
+title = "Traffic quality"
+statement = "Lower-intent or accidental clicks, for example from some placements or audiences, may have reduced how many visitors moved through the funnel."
+explains = ["link_clicks_to_landing_page_views", "landing_page_views_to_add_to_carts", "add_to_carts_to_checkouts_initiated", "checkouts_initiated_to_purchases"]
+investigations = ["placement_breakdown", "audience_breakdown"]
+if_supported = "Exclude or reduce the placements or audiences that send low-intent traffic, then recheck the funnel."
+if_not_supported = "Treat traffic quality as unlikely and focus on the website and checkout."
+
+# ---------------------------------------------------------------- Causes: AOV
+
+[[cause]]
+id = "product_mix"
+title = "Product mix"
+statement = "Sales may have shifted toward lower-priced products."
+explains = ["aov"]
+investigations = ["order_data"]
+if_supported = "Promote higher-value products or bundles in ads and on site."
+if_not_supported = "Check basket size, discounts and pricing instead."
+
+[[cause]]
+id = "basket_size"
+title = "Basket size"
+statement = "Customers may have bought fewer items per order."
+explains = ["aov"]
+investigations = ["order_data"]
+if_supported = "Test bundles, cross-sells or free-shipping thresholds."
+if_not_supported = "Check product mix and discounts instead."
+
+[[cause]]
+id = "discounts"
+title = "Discounts"
+statement = "Deeper or wider discounts may have lowered the value of each order."
+explains = ["aov"]
+investigations = ["order_data", "promo_calendar"]
+if_supported = "Review discount depth and eligibility for the advertised products."
+if_not_supported = "Keep discounts and check pricing and product mix."
+
+[[cause]]
+id = "pricing_change"
+title = "Pricing changes"
+statement = "Price reductions may have lowered the value of each order."
+explains = ["aov"]
+investigations = ["price_offer_log"]
+if_supported = "Weigh the lower prices against volume, and adjust if margins suffer."
+if_not_supported = "Keep pricing and check promotions and product mix."
+
+[[cause]]
+id = "promotion_change"
+title = "Promotion changes"
+statement = "A change in promotions, such as ending a bundle or order threshold, may have lowered order values."
+explains = ["aov"]
+investigations = ["promo_calendar"]
+if_supported = "Consider restoring the promotion that lifted order values."
+if_not_supported = "Check discounts and product mix instead."
+
+# ---------------------------------------------------------------- Causes: any KPI
+
+[[cause]]
+id = "campaign_mix"
+title = "Campaign mix shift"
+statement = "Spend may have shifted toward campaigns with weaker results, which can move the combined figures even if no campaign changed."
+explains = ["aov", "cpm", "ctr", "cvr", "link_clicks_to_landing_page_views", "landing_page_views_to_add_to_carts", "add_to_carts_to_checkouts_initiated", "checkouts_initiated_to_purchases"]
+requires = "campaigns"
+investigations = ["campaign_split"]
+if_supported = "Rebalance budget toward the campaigns that held up, and review the ones that took more spend."
+if_not_supported = "Treat the change as affecting campaigns generally, and follow the other checks."
+
+# ---------------------------------------------------------------- Shared causes for CPM + funnel
+
+[[cause]]
+id = "landing_experience_quality"
+title = "Landing page experience and ad quality"
+statement = "A poorer landing page experience may have lowered Meta's ad quality signals, which can raise CPM, and may also have reduced early funnel conversion."
+explains = ["cpm", "link_clicks_to_landing_page_views", "landing_page_views_to_add_to_carts"]
+only_with = "cpm_early_funnel"
+investigations = ["relevance_rankings", "page_performance"]
+if_supported = "Improve the landing page experience first, then recheck both CPM and the funnel stage."
+if_not_supported = "Treat the CPM and funnel problems as possibly separate, and follow each one's own checks."
+
+[[cause]]
+id = "delivery_shift"
+title = "Targeting, placement or audience shift"
+statement = "A shift in who the ads reach, through targeting, placements or audiences, may have raised CPM and also brought visitors who are less likely to buy."
+explains = ["cpm", "link_clicks_to_landing_page_views", "landing_page_views_to_add_to_carts", "add_to_carts_to_checkouts_initiated", "checkouts_initiated_to_purchases"]
+only_with = "cpm_funnel"
+investigations = ["placement_breakdown", "audience_breakdown", "targeting_change_log"]
+if_supported = "Revert or rebalance the targeting and placements that shifted, then recheck CPM and the funnel together."
+if_not_supported = "Treat the CPM and funnel problems as separate, and follow each one's own checks."
+
+# ---------------------------------------------------------------- Combination rules
+
+[[combination]]
+id = "cpm_ctr"
+when_all = ["cpm", "ctr"]
+note = "CPM and CTR both worsened. Investigate creative fatigue, audience saturation, auction conditions and delivery quality together, because one cause could affect both."
+causes = ["creative_fatigue", "audience_saturation", "auction_competition", "creative_relevance"]
+
+[[combination]]
+id = "cpm_funnel"
+when_all = ["cpm"]
+when_any = ["link_clicks_to_landing_page_views", "landing_page_views_to_add_to_carts", "add_to_carts_to_checkouts_initiated", "checkouts_initiated_to_purchases"]
+note = "CPM and a website funnel stage both worsened. They may be separate problems, so investigate the auction and the website separately. A shared explanation is also possible, such as a campaign mix, targeting, placement or traffic quality shift, so check those too."
+causes = ["campaign_mix", "delivery_shift"]
+
+[[combination]]
+id = "cpm_early_funnel"
+when_all = ["cpm"]
+when_any = ["link_clicks_to_landing_page_views", "landing_page_views_to_add_to_carts"]
+note = "The funnel problem is in an early stage, so landing page experience is a further possible shared factor, because Meta's ad quality signals take it into account."
+causes = ["landing_experience_quality"]
+
+# ---------------------------------------------------------------- Parent KPIs with no material input
+
+[[component_rule]]
+metric = "cpc"
+note = "CPC worsened while CPM and CTR each moved less than the threshold. Look at how both moved over earlier periods rather than for a separate CPC cause."
+investigations = ["earlier_periods"]
+
+[[component_rule]]
+metric = "cpa"
+note = "CPA worsened while CPC and CVR each moved less than the threshold. Look at how both moved over earlier periods rather than for a separate CPA cause."
+investigations = ["earlier_periods"]
+
+[[component_rule]]
+metric = "cvr"
+note = "CVR worsened, but the upload has no funnel stages to show where. Export the funnel stage columns to locate the drop."
+investigations = ["funnel_export"]
+
+# ---------------------------------------------------------------- Investigations
+
+[[investigation]]
+id = "campaign_split"
+title = "Compare each campaign separately"
+source = "campaigns"
+detail = "Choose each campaign in the sidebar's Campaign menu to see whether the change is concentrated in one campaign."
+unavailable_detail = "Export the report broken down by campaign to see whether the change is concentrated in one campaign."
+
+[[investigation]]
+id = "earlier_periods"
+title = "Compare earlier periods"
+source = "periods"
+detail = "Choose earlier periods in the sidebar to see whether the change is recent, a trend or a recurring pattern."
+unavailable_detail = "Export a longer date range to see whether the change is recent, a trend or a recurring pattern."
+
+[[investigation]]
+id = "frequency_reach"
+title = "Frequency and reach over time"
+source = "external"
+detail = "Frequency and reach by ad set for both periods, from Meta Ads Manager. Your export may already include Reach and Frequency columns, but this app doesn't analyse them yet."
+
+[[investigation]]
+id = "creative_age"
+title = "Creative age"
+source = "external"
+detail = "Launch date and impressions of each active creative."
+
+[[investigation]]
+id = "ad_level_ctr"
+title = "CTR for each ad"
+source = "external"
+detail = "An ad-level export with CTR for each ad in both periods."
+
+[[investigation]]
+id = "creative_change_log"
+title = "Creative and messaging changes"
+source = "external"
+detail = "A record of creative, copy and offer changes made during the periods."
+
+[[investigation]]
+id = "audience_breakdown"
+title = "Results by audience"
+source = "external"
+detail = "Results by age, gender, region or audience segment for both periods."
+
+[[investigation]]
+id = "targeting_change_log"
+title = "Targeting changes"
+source = "external"
+detail = "A record of targeting and audience changes made during the periods."
+
+[[investigation]]
+id = "relevance_rankings"
+title = "Meta quality and relevance rankings"
+source = "external"
+detail = "Quality, engagement rate and conversion rate rankings for each ad."
+
+[[investigation]]
+id = "auction_benchmarks"
+title = "Auction and industry benchmarks"
+source = "external"
+detail = "Industry CPM benchmarks or auction overlap data for the same weeks."
+
+[[investigation]]
+id = "last_year"
+title = "Same period last year"
+source = "external"
+detail = "CPM for the same weeks last year, to separate seasonality from account changes."
+
+[[investigation]]
+id = "placement_breakdown"
+title = "Results by placement"
+source = "external"
+detail = "CPM and results by placement for both periods."
+
+[[investigation]]
+id = "account_change_log"
+title = "Account change history"
+source = "external"
+detail = "Meta Ads Manager's change history for budgets, structure and settings."
+
+[[investigation]]
+id = "page_performance"
+title = "Landing page speed and errors"
+source = "external"
+detail = "Page load times and error rates for the landing pages, from site analytics."
+
+[[investigation]]
+id = "tracking_diagnostics"
+title = "Tracking diagnostics"
+source = "external"
+detail = "Pixel and Conversions API event diagnostics for the periods."
+
+[[investigation]]
+id = "ad_page_review"
+title = "Ad and landing page review"
+source = "external"
+detail = "A side-by-side review of each ad's promise and the page it links to."
+
+[[investigation]]
+id = "page_engagement"
+title = "Product page engagement"
+source = "external"
+detail = "Time on page, scroll depth and exits for the advertised product pages."
+
+[[investigation]]
+id = "site_change_log"
+title = "Website change log"
+source = "external"
+detail = "A record of website, cart and checkout changes made during the periods."
+
+[[investigation]]
+id = "price_offer_log"
+title = "Price and offer history"
+source = "external"
+detail = "Prices and offers for the advertised products in both periods."
+
+[[investigation]]
+id = "stock_records"
+title = "Stock levels"
+source = "external"
+detail = "Stock and size availability for the advertised products."
+
+[[investigation]]
+id = "cart_analytics"
+title = "Cart behaviour"
+source = "external"
+detail = "Cart page exits and errors from site analytics."
+
+[[investigation]]
+id = "shipping_log"
+title = "Shipping costs shown"
+source = "external"
+detail = "Shipping prices and free-shipping thresholds shown in the cart and checkout."
+
+[[investigation]]
+id = "checkout_steps"
+title = "Checkout step completion"
+source = "external"
+detail = "Completion rates for each checkout step, including login and forms."
+
+[[investigation]]
+id = "payment_logs"
+title = "Payment logs"
+source = "external"
+detail = "Payment gateway errors and payment method usage for both periods."
+
+[[investigation]]
+id = "order_data"
+title = "Order-level data"
+source = "external"
+detail = "Products, quantities and discounts for each order in both periods."
+
+[[investigation]]
+id = "promo_calendar"
+title = "Promotion calendar"
+source = "external"
+detail = "Promotions, bundles and discount codes active in each period."
+
+[[investigation]]
+id = "funnel_export"
+title = "Funnel stage export"
+source = "external"
+detail = "A Meta export that includes landing page views, adds to cart and checkouts initiated."
