@@ -224,10 +224,12 @@ def _ai_note(label, text):
 
 
 def _cause_card(cause):
+    notes = " ".join(text for _, kind, text in cause.signs if kind != "supports")
     return (
         '<article class="card">'
         f'<div class="card-tag">{escape(cause.title)} · Could explain {escape(", ".join(cause.explains))}</div>'
-        f"<p>{escape(cause.statement)}</p>{_ai_note('Why the AI ranks it here', cause.ai_note)}</article>"
+        f"<p>{escape(cause.statement)}</p>" + (f'<p class="note">{escape(notes)}</p>' if notes else "")
+        + f"{_ai_note('Why the AI ranks it here', cause.ai_note)}</article>"
     )
 
 

@@ -268,7 +268,13 @@ def _next_steps(marketing):
     """
     actions = {action.cause: action for action in marketing.actions}
     top = marketing.top_investigations
-    queues = [[c.title for c in marketing.causes if c.title in item.tests and c.title in actions] for item in top]
+    # A cause whose usual explanation relies on a movement that went the other way isn't
+    # promoted. It stays in the detailed analysis, and its slot goes to the next cause the
+    # same checks test, never to an unrelated one.
+    queues = [
+        [c.title for c in marketing.causes if c.title in item.tests and c.title in actions and not c.contradicted]
+        for item in top
+    ]
     chosen, related = [], {}
     while len(chosen) < NEXT_STEPS and any(queues):
         for queue in queues:

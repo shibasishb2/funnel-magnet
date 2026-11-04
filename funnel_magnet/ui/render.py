@@ -145,11 +145,17 @@ def ai_status_html(ai):
     )
 
 
+def _signs_note(cause, note_class):
+    notes = [text for _, kind, text in cause.signs if kind != "supports"]
+    return f'<p class="{note_class}">{escape(" ".join(notes))}</p>' if notes else ""
+
+
 def _cause_card(cause):
     return (
         '<article class="fm-ai-card">'
         f'<div class="fm-ai-card-tag">{escape(cause.title)} · Could explain {escape(", ".join(cause.explains))}</div>'
-        f"<p>{escape(cause.statement)}</p>{_ai_note('Why the AI ranks it here', cause.ai_note)}</article>"
+        f"<p>{escape(cause.statement)}</p>{_signs_note(cause, 'fm-panel-note')}"
+        f"{_ai_note('Why the AI ranks it here', cause.ai_note)}</article>"
     )
 
 

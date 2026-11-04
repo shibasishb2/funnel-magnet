@@ -60,6 +60,8 @@ id = "audience_saturation"
 title = "Audience saturation"
 statement = "The available audience may be saturated, which can lower CTR and raise CPM at the same time."
 explains = ["ctr", "cpm"]
+# Its usual explanation needs both of these to worsen together.
+typical_signs = ["ctr", "cpm"]
 investigations = ["frequency_reach", "audience_breakdown"]
 if_supported = "Broaden or refresh audiences, or reduce frequency, before increasing budget."
 if_not_supported = "Keep audience size as it is and check creative and auction factors."
@@ -69,6 +71,7 @@ id = "creative_relevance"
 title = "Lower ad quality or relevance"
 statement = "Meta may rate the ads as less relevant, which can lower CTR and raise CPM."
 explains = ["ctr", "cpm"]
+typical_signs = ["ctr", "cpm"]
 investigations = ["relevance_rankings", "ad_level_ctr"]
 check_only_if = { ad_level_ctr = "ctr" }
 if_supported = "Pause ads ranked below average and test more relevant creative."

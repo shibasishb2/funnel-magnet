@@ -61,6 +61,19 @@ class CauseItem:
     statement: str
     explains: tuple[str, ...]
     ai_note: str = ""
+    # For a cause whose usual explanation needs several KPIs to worsen together, how
+    # each of those KPIs actually moved: (label, "supports" | "weakens" | "contradicts" |
+    # "missing", plain description).
+    signs: tuple[tuple[str, str, str], ...] = ()
+
+    @property
+    def contradicted(self):
+        """True when a KPI its usual explanation relies on moved materially the other way.
+
+        That weakens the usual explanation without ruling the cause out, so the cause stays
+        in the detailed analysis but isn't promoted to the executive next steps.
+        """
+        return any(kind == "contradicts" for _, kind, _ in self.signs)
 
     @property
     def shared(self):
@@ -174,6 +187,8 @@ def load_playbook(path=PLAYBOOK_PATH):
         _check(cause.get("if_supported") and cause.get("if_not_supported"), f"cause {name} needs both actions.")
         _check(cause.get("only_with") in (None, *combination_ids), f"cause {name} has an unknown only_with.")
         _check(cause.get("requires") in (None, "campaigns"), f"cause {name} has an unknown requires.")
+        _check(set(cause.get("typical_signs", [])) <= set(cause.get("explains", [])),
+               f"cause {name} has typical_signs outside what it explains.")
         conditional = cause.get("check_only_if", {})
         _check(set(conditional) <= set(cause.get("investigations", [])), f"cause {name} has check_only_if for a check it doesn't use.")
         _check(set(conditional.values()) <= KNOWN_METRICS, f"cause {name} has check_only_if with an unknown metric.")
@@ -294,6 +309,31 @@ def _rank(checks, shares, labels, has_funnel_problem):
     return ordered
 
 
+# Costs are worse when they rise. Every other KPI here is worse when it falls.
+WORSE_WHEN_HIGHER = frozenset({"cpm", "cpc", "cpa"})
+
+
+def _sign(diagnosis, metric):
+    """How one KPI moved against a cause's usual explanation, which expects it to worsen."""
+    change = diagnosis.changes.get(metric)
+    label = view.metric_label(metric)
+    if change is None or change.pct_change is None or change.status is Status.UNDEFINED:
+        return label, "missing", f"{label} can't be compared, so it gives no evidence either way."
+    moved = f"{label} {'rose' if change.pct_change > 0 else 'fell'} {abs(change.pct_change):.1%}"
+    expected = "rise" if metric in WORSE_WHEN_HIGHER else "fall"
+    if change.status is Status.DETERIORATED:
+        return label, "supports", f"{moved}, as this explanation expects."
+    if change.status is Status.IMPROVED:
+        return label, "contradicts", (
+            f"This explanation usually expects {label} to {expected}, but {moved}. "
+            "That weakens the usual explanation without ruling the cause out."
+        )
+    worse = (change.pct_change > 0) == (metric in WORSE_WHEN_HIGHER)
+    if change.pct_change and not worse:
+        return label, "weakens", f"{moved}, slightly against what this explanation expects."
+    return label, "missing", f"{label} didn't change materially, so it gives no evidence either way."
+
+
 def _stage_checks(playbook, problem_metrics, available):
     """Checks for causes specific to each worsened funnel stage.
 
@@ -347,7 +387,10 @@ def build(diagnosis, currency=None, several_campaigns=False, earlier_periods=Fal
     )
 
     causes = tuple(
-        CauseItem(cause["id"], cause["title"], cause["statement"], tuple(labels[m] for m in explained))
+        CauseItem(
+            cause["id"], cause["title"], cause["statement"], tuple(labels[m] for m in explained),
+            signs=tuple(_sign(diagnosis, metric) for metric in cause.get("typical_signs", [])),
+        )
         for cause, explained in matched
     )
 

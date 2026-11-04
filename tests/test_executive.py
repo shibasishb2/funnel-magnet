@@ -10,6 +10,7 @@ from funnel_magnet import playbook
 from funnel_magnet.ai import prioritise
 from funnel_magnet.ai.evidence import build_evidence
 from funnel_magnet.diagnose import diagnose_totals, run_diagnosis
+from funnel_magnet.metrics import Totals
 from funnel_magnet.periods import MONTHLY, WEEKLY
 from funnel_magnet.sources.meta import load_meta_csv
 from funnel_magnet.ui import executive, render, report, view
@@ -296,3 +297,92 @@ def test_funnel_explanations_keep_tracking_open_as_a_possibility():
         "Fewer purchases are recorded for each checkout started. This may indicate lost sales "
         "during checkout or a tracking issue, both of which should be investigated."
     )
+
+
+# Cross-KPI consistency: the September-October uploaded pattern, from an account-level file.
+# CPM +44.4%, CTR +48.9%, Checkout -> Purchase -12.2%, ROAS +13.3%.
+
+UPLOADED_OCTOBER = Totals(100_000.0, 224_488.0, 4578.0, 60 / 113 * 0.878 * 140, 3.1596 * 1.133 * 100_000, 3975.0, 708.0, 140.0)
+
+
+def uploaded_pattern():
+    diagnosis = diagnose_totals(SEPTEMBER, UPLOADED_OCTOBER)
+    diagnosis.prior_label, diagnosis.current_label = "2026-09", "2026-10"
+    return diagnosis, playbook.build(diagnosis, "INR", several_campaigns=False, earlier_periods=True)
+
+
+def test_the_uploaded_pattern_matches_the_reported_figures():
+    diagnosis, _ = uploaded_pattern()
+    changes = {k: round(diagnosis.changes[k].pct_change * 100, 1) for k in ("cpm", "ctr", "checkouts_initiated_to_purchases", "roas")}
+
+    assert changes == {"cpm": 44.4, "ctr": 48.9, "checkouts_initiated_to_purchases": -12.2, "roas": 13.3}
+
+
+def test_saturation_is_not_promoted_when_ctr_rose_but_stays_in_detail():
+    diagnosis, marketing = uploaded_pattern()
+    summary = executive.build(diagnosis, marketing)
+    saturation = next(c for c in marketing.causes if c.id == "audience_saturation")
+
+    assert "Audience saturation" not in [s.cause for s in summary.next_steps]
+    assert not any("lower CTR" in s.text for s in summary.next_steps)
+    # Still a possibility in the detailed analysis, with the evidence stated plainly.
+    assert saturation.contradicted
+    assert dict((label, kind) for label, kind, _ in saturation.signs) == {"CTR": "contradicts", "CPM": "supports"}
+    assert "without ruling the cause out" in render.possible_causes_html(marketing)
+
+
+def test_every_promoted_step_stays_tied_to_the_top_three():
+    diagnosis, marketing = uploaded_pattern()
+    summary = executive.build(diagnosis, marketing)
+    top = {c.title for c in summary.checks}
+
+    assert [s.cause for s in summary.next_steps] == ["Targeting, placement or audience shift", "Tracking problem", "Traffic quality"]
+    for step in summary.next_steps:
+        assert {title for _, title in step.checks} <= top and step.checks
+
+
+def test_saturation_stays_a_next_step_when_ctr_really_fell():
+    diagnosis, marketing, _, _ = scenario("CTR decline")
+    saturation = next(c for c in marketing.causes if c.id == "audience_saturation")
+
+    assert not saturation.contradicted
+    assert dict((label, kind) for label, kind, _ in saturation.signs)["CTR"] == "supports"
+    assert "Audience saturation" in [s.cause for s in executive.build(diagnosis, marketing).next_steps]
+
+
+@pytest.mark.parametrize(
+    "name, steps",
+    [
+        ("CPM inflation", ["Account structure", "Seasonality", "Budget scaling or bid strategy"]),
+        ("Masked problem", ["Account structure", "Seasonality", "Budget scaling or bid strategy"]),
+        ("Landing page issue", ["Tracking problem", "Campaign mix shift", "Landing page speed or errors"]),
+        ("Checkout friction", ["Tracking problem", "Payment options", "Campaign mix shift"]),
+        ("Sep-Oct", ["Campaign mix shift", "Targeting, placement or audience shift", "Tracking problem"]),
+    ],
+)
+def test_other_scenarios_keep_their_next_steps(name, steps):
+    assert [s.cause for s in executive.build(*scenario(name)[:2]).next_steps] == steps
+
+
+def test_ai_ordering_cannot_promote_a_contradicted_cause():
+    diagnosis, marketing = uploaded_pattern()
+    reply = {
+        "cause_priorities": [{"cause_id": "audience_saturation", "rationale": ""}],
+        "check_priorities": [{"check_id": "audience_breakdown", "rationale": ""}, {"check_id": "frequency_reach", "rationale": ""}],
+        "relationship": "",
+        "action_guidance": [],
+    }
+    prioritised = prioritise.merge(marketing, reply, build_evidence(diagnosis, "INR"), "Groq", "openai/gpt-oss-120b")
+
+    assert prioritised.causes[0].id == "audience_saturation"
+    assert "Audience saturation" not in [s.cause for s in executive.build(diagnosis, prioritised).next_steps]
+
+
+def test_page_and_report_show_the_same_evidence_note():
+    diagnosis, marketing = uploaded_pattern()
+    html = report.build_report(report.ReportInput(
+        diagnosis, build_evidence(diagnosis, "INR"), "File", "All campaigns", "a", "b", "c", date(2026, 11, 4), "INR", marketing=marketing,
+    ))
+    note = next(text for _, kind, text in next(c for c in marketing.causes if c.id == "audience_saturation").signs if kind == "contradicts")
+
+    assert escape(note) in render.possible_causes_html(marketing) and escape(note) in html

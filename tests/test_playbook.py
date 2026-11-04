@@ -51,6 +51,7 @@ def test_playbook_loads_and_every_cause_is_hedged():
         ('if_unclear = "Comparing campaigns', 'unclear = "Comparing campaigns', "needs look_at, readings and if_unclear"),
         ('a campaign mix shift may explain part', 'a campaign mix shift confirms part', "presents a result as proof"),
         ('in both periods, next to {kpis}', 'in both periods, next to {kpi}', "unknown placeholder"),
+        ('typical_signs = ["ctr", "cpm"]\ninvestigations = ["frequency_reach"', 'typical_signs = ["ctr", "aov"]\ninvestigations = ["frequency_reach"', "typical_signs outside"),
     ],
 )
 def test_a_broken_playbook_fails_loudly(tmp_path, old, new, message):
