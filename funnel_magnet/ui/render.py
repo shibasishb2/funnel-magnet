@@ -139,8 +139,8 @@ def ai_status_html(ai):
     return (
         '<section class="fm-panel fm-ai-status">'
         f'<div class="fm-panel-tag">AI prioritisation · {escape(ai.provider)} {escape(ai.model)}</div>'
-        '<p class="fm-panel-note">The AI reordered and explained the playbook items below. It added no findings, '
-        "and every cause remains unconfirmed.</p>"
+        '<p class="fm-panel-note">It reordered the playbook\'s checks and causes and added no findings. '
+        "Causes remain unconfirmed.</p>"
         f"{relationship}{withheld}</section>"
     )
 
@@ -205,19 +205,21 @@ def interpretation_html(item):
 
 
 def _check_html(item):
+    folded = _more("What the result could mean", interpretation_html(item)) if item.readings else ""
     return (
-        f"<li><strong>{escape(item.title)}</strong> · {_where(item)}. {escape(item.detail)}{interpretation_html(item)}"
+        f"<li><strong>{escape(item.title)}</strong> · {_where(item)}. {escape(item.detail)}{folded}"
         f'<div class="fm-panel-note">Helps test: {escape(", ".join(item.tests))}.</div>'
         f"{_ai_note('AI', item.ai_note)}</li>"
     )
 
 
 def _top_check_html(rank, item):
-    why = f"<p><strong>Why first:</strong> {escape(item.reason)}</p>" if item.reason else ""
+    """A top-three check in the detailed analysis. Its interpretation is in the summary above."""
+    why = f'<p class="fm-panel-note">Why first: {escape(item.reason)}</p>' if item.reason else ""
     return (
         '<article class="fm-ai-card fm-priority">'
         f'<div class="fm-ai-card-tag">Priority {rank} · {_where(item)}</div>'
-        f"<p><strong>{escape(item.title)}.</strong> {escape(item.detail)}</p>{interpretation_html(item)}{why}"
+        f"<p><strong>{escape(item.title)}.</strong> {escape(item.detail)}</p>{why}"
         f"{_ai_note('Why the AI ranks it here', item.ai_note)}"
         f'<p class="fm-panel-note">Helps test: {escape(", ".join(item.tests))}.</p></article>'
     )
@@ -258,54 +260,70 @@ def actions_html(marketing):
     )
 
 
-def executive_html(summary):
-    """Level 1: the executive diagnosis, from the same diagnosis as the detailed analysis."""
-    narrative = "".join(f"<p>{escape(sentence)}</p>" for sentence in summary.narrative)
+def _exec_card(check):
+    """One investigation: what to check, the result that would support a cause, and the action."""
+    cause = ""
+    if check.cause:
+        related = f" (related: {escape(', '.join(check.related))})" if check.related else ""
+        cause = (
+            f"<p><strong>Would support {escape(check.cause)}{related}:</strong> {escape(check.supports_if)}</p>"
+            f"<p><strong>If supported:</strong> {escape(check.action)}</p>"
+        )
+    elif check.supports_if:
+        cause = f"<p><strong>What to look for:</strong> {escape(check.supports_if)}</p>"
+    more = "".join(f"<li>{escape(reading)}</li>" for reading in check.other_readings)
+    folded = _more(
+        "Other results and uncertainty",
+        (f"<ul>{more}</ul>" if more else "") + f"<p><strong>If the result is unclear:</strong> {escape(check.if_unclear)}</p>",
+    ) if (more or check.if_unclear) else ""
+    return (
+        '<article class="fm-ai-card fm-exec-check">'
+        f'<div class="fm-ai-card-tag">Priority {check.rank} · {escape(check.where)}</div>'
+        f"<p><strong>{escape(check.title)}.</strong> {escape(check.look_at)}</p>{cause}{folded}</article>"
+    )
+
+
+def executive_html(summary, prior_label="", current_label=""):
+    """Level 1: what changed, what needs attention, and what to investigate next."""
+    source_class = "fm-source fm-source-synthetic" if summary.synthetic else "fm-source"
+    source = f'<p class="{source_class}">{escape(summary.source)}</p>' if summary.source else ""
+    tiles = ""
+    if summary.tiles:
+        tiles = kpis_html(summary.tiles, prior_label, current_label).replace('class="fm-kpis"', 'class="fm-kpis fm-kpis-compact"')
+        tiles = tiles[tiles.index('<div class="fm-kpis'):]
+    mechanisms = "".join(f'<p class="fm-mechanism">{escape(chain)}</p>' for chain in summary.mechanisms)
+    cancel = f"<p>{escape(summary.cancel)}</p>" if summary.cancel else ""
+
+    shown = {tile.label for tile in summary.tiles}
     if summary.problems:
         problems = "<ul>" + "".join(
-            f"<li><strong>{escape(p.change)}</strong>"
+            # A KPI already on a tile needs only its name here, not its figures again.
+            f"<li><strong>{escape(p.label if p.label in shown else p.change)}</strong>"
             + (' <span class="fm-hidden">Hidden by overall ROAS</span>' if p.hidden else "")
-            + (f'<div class="fm-panel-note">{escape(p.effect)}</div>' if p.effect else "")
-            + (f"<div>Why it matters: {escape(p.why)}</div>" if p.why else "")
+            + (f'<div class="fm-panel-note">{escape(p.why)}</div>' if p.why else "")
             + "</li>"
             for p in summary.problems
         ) + "</ul>"
     else:
         problems = "<p>No final KPI worsened by the threshold or more.</p>"
-    checks = "".join(
-        '<article class="fm-ai-card fm-exec-check">'
-        f'<div class="fm-ai-card-tag">Priority {c.rank} · {escape(c.where)}</div>'
-        f"<p><strong>{escape(c.title)}.</strong> {escape(c.what)}</p>"
-        + interpretation_html(c)
-        + (f'<p class="fm-panel-note">Why first: {escape(c.why_first)}</p>' if c.why_first else "")
-        + _ai_note("Why the AI ranks it here", c.ai_note)
-        + "</article>"
-        for c in summary.checks
-    )
-    steps = "".join(f"<li><strong>{escape(s.cause)}.</strong> {escape(s.text)}</li>" for s in summary.next_steps)
-    stage_checks = "".join(
-        f'<div class="fm-ai-heading">Direct checks for {escape(label)}, after tracking</div><ul>'
-        + "".join(f"<li><strong>{escape(c.title)}</strong> ({escape(c.where)}): {escape(c.look_at)}</li>" for c in checks)
-        + "</ul>"
-        for label, checks in summary.stage_checks
-    )
-    source_class = "fm-source fm-source-synthetic" if summary.synthetic else "fm-source"
-    source = f'<p class="{source_class}">{escape(summary.source)}</p>' if summary.source else ""
     notes = "".join(f"<li>{escape(note)}</li>" for note in summary.data_notes)
+
+    checks = "".join(_exec_card(check) for check in summary.checks)
+    stage_checks = "".join(
+        f'<p class="fm-panel-note"><strong>Also for {escape(label)}, after tracking:</strong> '
+        f"{escape(' · '.join(c.title for c in checks_))}.</p>"
+        for label, checks_ in summary.stage_checks
+    )
+    investigate = (checks + stage_checks) if checks else "<p>Nothing needs investigating for this comparison.</p>"
     return (
         '<section class="fm-panel fm-executive fm-section">'
-        '<div class="fm-panel-tag">Plain-English summary · Written from Python\'s calculations</div>'
-        f'{source}<p class="fm-headline">{escape(summary.headline)}</p>{narrative}'
-        f"{_ai_note('AI, how the problems may relate', summary.ai_relationship)}"
-        f'<div class="fm-ai-heading">KPIs that need attention</div>{problems}'
-        + (f'<p class="fm-panel-note">{escape(summary.share_note)}</p>' if summary.share_note else "")
-        + (f'<div class="fm-ai-heading">Top three investigations</div>{checks}' if checks else "")
-        + stage_checks
-        + (
-            '<div class="fm-ai-heading">Next steps, only if the evidence supports them</div>'
-            f'<ul>{steps}</ul><p class="fm-panel-note">The full action plan for every cause is in the detailed analysis.</p>'
-            if steps else ""
-        )
-        + (f'<div class="fm-ai-heading">Data notes</div><ul class="fm-panel-note">{notes}</ul>' if notes else "")
-        + "</section>"
+        f"{source}"
+        '<div class="fm-question">What changed?</div>'
+        f'<p class="fm-headline">{escape(summary.headline)}</p>{tiles}{mechanisms}{cancel}'
+        '<div class="fm-question">What needs attention?</div>'
+        f"{problems}"
+        + (f'<ul class="fm-panel-note">{notes}</ul>' if notes else "")
+        + '<div class="fm-question">What should I investigate next?</div>'
+        f"{investigate}"
+        "</section>"
     )

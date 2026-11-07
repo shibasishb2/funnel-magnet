@@ -148,18 +148,6 @@ def _ai_alert(marketing):
     )
 
 
-def _legend():
-    return (
-        '<p class="legend">'
-        f"{_tag('confirmed', 'A. Confirmed findings')} calculated from the data. "
-        f"{_tag('hypothesis', 'B. Possible causes')} from the playbook, not confirmed. "
-        f"{_tag('recommendation', 'C. What to investigate')} and "
-        f"{_tag('recommendation', 'D. Potential actions')} depend on what the checks find. "
-        f"{_tag('driver', 'AI')} content is labelled separately."
-        "</p>"
-    )
-
-
 def _move_html(move):
     extra = [f"Path: {move.path}"]
     if move.contribution:
@@ -238,54 +226,63 @@ def _where(check):
 
 
 def _executive_section(item):
-    """Level 1, built by the same function as the dashboard's, from the same diagnosis."""
-    summary = executive.build(item.diagnosis, item.sections, item.load_warnings, item.source_name, item.synthetic)
-    narrative = "".join(f"<p>{escape(sentence)}</p>" for sentence in summary.narrative)
+    """Level 1, built by the same function as the dashboard's, from the same diagnosis.
+
+    It answers what changed, what needs attention and what to investigate next. Every
+    check's full interpretation, including the one for each top-three check, is in section 3.
+    """
+    diagnosis = item.diagnosis
+    summary = executive.build(diagnosis, item.sections, item.load_warnings, item.source_name, item.synthetic, item.currency)
+    source_class = "source source-synthetic" if summary.synthetic else "source"
+    source = f'<p class="{source_class}">{escape(summary.source)}</p>' if summary.source else ""
+    tiles = ""
+    if summary.tiles:
+        rows = [
+            f"<tr><td>{escape(t.label)}</td><td>{escape(t.prior)}</td><td>{escape(t.current)}</td>"
+            f'<td class="status-{STATUS_CLASSES[t.status]}">{escape(t.change)}</td></tr>'
+            for t in summary.tiles
+        ]
+        tiles = _table(("KPI", diagnosis.prior_label or "Prior", diagnosis.current_label or "Current", "Change"), rows, "numbers")
+    mechanisms = "".join(f'<p class="note">{escape(chain)}</p>' for chain in summary.mechanisms)
+    cancel = f"<p>{escape(summary.cancel)}</p>" if summary.cancel else ""
     problems = "".join(
         f"<li><strong>{escape(p.change)}</strong>"
         + (' <span class="hidden-problem">Hidden by overall ROAS</span>' if p.hidden else "")
-        + (f'<div class="note">{escape(p.effect)}</div>' if p.effect else "")
-        + (f"<div>Why it matters: {escape(p.why)}</div>" if p.why else "")
+        + (f'<div class="note">{escape(p.why)}</div>' if p.why else "")
         + "</li>"
         for p in summary.problems
     )
+    notes = "".join(f"<li>{escape(note)}</li>" for note in summary.data_notes)
     checks = "".join(
         '<article class="card exec-check">'
         f'<div class="card-tag">Priority {c.rank} · {escape(c.where)}</div>'
-        f"<p><strong>{escape(c.title)}.</strong> {escape(c.what)}</p>"
-        + _interpretation_html(c)
-        + (f'<p class="note">Why first: {escape(c.why_first)}</p>' if c.why_first else "")
-        + _ai_note("Why the AI ranks it here", c.ai_note)
+        f"<p><strong>{escape(c.title)}.</strong> {escape(c.look_at)}</p>"
+        + (
+            f"<p><strong>Would support {escape(c.cause)}"
+            + (f" (related: {escape(', '.join(c.related))})" if c.related else "")
+            + f":</strong> {escape(c.supports_if)}</p><p><strong>If supported:</strong> {escape(c.action)}</p>"
+            if c.cause else (f"<p><strong>What to look for:</strong> {escape(c.supports_if)}</p>" if c.supports_if else "")
+        )
         + "</article>"
         for c in summary.checks
     )
-    steps = "".join(f"<li><strong>{escape(s.cause)}.</strong> {escape(s.text)}</li>" for s in summary.next_steps)
     stage_checks = "".join(
-        f"<h3>Direct checks for {escape(label)}, after tracking</h3><ul>"
-        + "".join(f"<li><strong>{escape(c.title)}</strong> ({escape(c.where)}): {escape(c.look_at)}</li>" for c in checks)
-        + "</ul>"
-        for label, checks in summary.stage_checks
+        f'<p class="note"><strong>Also for {escape(label)}, after tracking:</strong> '
+        f"{escape(' · '.join(c.title for c in checks_))}.</p>"
+        for label, checks_ in summary.stage_checks
     )
-    source_class = "source source-synthetic" if summary.synthetic else "source"
-    source = f'<p class="{source_class}">{escape(summary.source)}</p>' if summary.source else ""
-    notes = "".join(f"<li>{escape(note)}</li>" for note in summary.data_notes)
     return (
         '<section class="executive"><h2>Executive diagnosis</h2>'
-        f"{_tag('confirmed', 'Written from Python’s calculations')}"
-        f'{source}<p class="headline">{escape(summary.headline)}</p>{narrative}'
-        f"{_ai_note('AI, how the problems may relate', summary.ai_relationship)}"
-        "<h3>KPIs that need attention</h3>"
+        f"{source}"
+        "<h3>What changed?</h3>"
+        f'<p class="headline">{escape(summary.headline)}</p>{tiles}{mechanisms}{cancel}'
+        "<h3>What needs attention?</h3>"
         + (f"<ul>{problems}</ul>" if problems else "<p>No final KPI worsened by the threshold or more.</p>")
-        + (f'<p class="note">{escape(summary.share_note)}</p>' if summary.share_note else "")
-        + (f"<h3>Top three investigations</h3>{checks}" if checks else "")
-        + stage_checks
-        + (
-            f"<h3>Next steps, only if the evidence supports them</h3><ul>{steps}</ul>"
-            '<p class="note">The full action plan for every cause is in section 4.</p>'
-            if steps else ""
-        )
-        + (f'<h3>Data notes</h3><ul class="note">{notes}</ul>' if notes else "")
-        + "</section>"
+        + (f'<ul class="note">{notes}</ul>' if notes else "")
+        + "<h3>What should I investigate next?</h3>"
+        + ((checks + stage_checks) if checks else "<p>Nothing needs investigating for this comparison.</p>")
+        + '<p class="note">Section 3 has every check\'s full interpretation, and section 4 every conditional action.</p>'
+        "</section>"
         '<h2 class="part">Detailed analysis</h2>'
     )
 
@@ -440,7 +437,7 @@ def build_report(item):
         "<h1>Meta Ads Diagnostic Report</h1></header>"
         f"{_details_html(item)}"
         f'<p class="notice">{escape(view.DECISION_SUPPORT_NOTICE)}</p>'
-        f"{_ai_alert(item.marketing)}{_executive_section(item)}{_legend()}"
+        f"{_ai_alert(item.marketing)}{_executive_section(item)}"
         f"{_findings_section(item)}{_causes_section(item)}{_investigations_section(item)}"
         f"{_actions_section(item)}{_ai_sections(item)}"
         f"{_quality_section(item, first_free)}{_method_section(first_free + 1)}"

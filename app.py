@@ -26,6 +26,8 @@ PRIVACY_NOTICE = (
     "information. The file is read in this app's memory and isn't saved. AI prioritisation sends "
     "Groq only totals and playbook text, never rows, campaign names or file names."
 )
+# The full decision-support notice is in the report. The page keeps one short line.
+PAGE_NOTICE = "Decision support: it shows what changed and what to check. Possible causes are not confirmed."
 SESSION_LIMIT_MESSAGE = (
     "This session has used its {limit} AI analyses. The diagnosis below is complete without AI."
 )
@@ -62,7 +64,7 @@ def show_load_errors(result):
     if any(issue.code == "missing_values" for issue in result.errors):
         st.info(
             "If blank cells in this export mean zero, tick **Blank Meta action cells mean zero** "
-            "in the sidebar."
+            "under Advanced in the sidebar."
         )
     for issue in result.warnings:
         st.warning(view.humanize(issue.message))
@@ -72,11 +74,14 @@ def period_text(period):
     return f"{period.label} ({period.start:%d %b} to {period.end:%d %b %Y})"
 
 
-def select_comparison(data, source_name):
-    """Return the chosen settings, or None when there are too few periods to compare."""
-    st.sidebar.header("Comparison")
+def select_comparison(data, source_name, box, advanced):
+    """Return the chosen settings, or None when there are too few periods to compare.
+
+    The essential choices go in the sidebar's Comparison section and the threshold in Advanced.
+    """
+    box.header("Comparison")
     granularity = GRANULARITIES[
-        st.sidebar.radio("Period", list(GRANULARITIES), horizontal=True)
+        box.radio("Period", list(GRANULARITIES), horizontal=True)
     ]
     periods = list_complete_periods(data, granularity)
     if len(periods) < 2:
@@ -87,28 +92,30 @@ def select_comparison(data, source_name):
         return None
 
     # Keys change with the options, so a new file or period type resets to the latest two.
-    prior = st.sidebar.selectbox(
+    prior = box.selectbox(
         "Prior period",
         periods,
         index=len(periods) - 2,
         format_func=period_text,
         key=f"prior-{source_name}-{granularity}",
     )
-    current = st.sidebar.selectbox(
+    current = box.selectbox(
         "Current period",
         periods,
         index=len(periods) - 1,
         format_func=period_text,
         key=f"current-{source_name}-{granularity}",
     )
-    # An account-level export has only the synthetic label, so there is nothing to split.
+    # An account-level export has only the synthetic label, so there is nothing to choose.
     campaigns = sorted(set(data["campaign"]) - {ACCOUNT_LEVEL_CAMPAIGN})
-    campaign = st.sidebar.selectbox(
-        "Campaign",
-        [ALL_CAMPAIGNS, *campaigns],
-        key=f"campaign-{source_name}",
-    )
-    threshold = st.sidebar.number_input(
+    campaign = ALL_CAMPAIGNS
+    if campaigns:
+        campaign = box.selectbox(
+            "Campaign",
+            [ALL_CAMPAIGNS, *campaigns],
+            key=f"campaign-{source_name}",
+        )
+    threshold = advanced.number_input(
         "Materiality threshold (%)",
         min_value=0.0,
         max_value=99.0,
@@ -143,7 +150,7 @@ def show_contributions(diagnosis):
         "and the bars sum exactly to the ROAS change. In the table, share of movement is each KPI's "
         "part of all ROAS movement in both directions added together, not a share of the net change."
     )
-    # Shown directly, because this sits inside the Detailed analysis expander.
+    # Shown directly, because this sits inside the Detailed analysis tabs.
     st.caption("Contribution table")
     st.dataframe(pd.DataFrame(view.driver_table(diagnosis)), hide_index=True)
 
@@ -229,14 +236,12 @@ def show_ai_priorities(marketing, evidence, assessable):
         # Draw the page again with the outcome, so the count and button are never stale.
         st.session_state["ai_feedback"] = (key, request_ai_priorities(marketing, evidence, settings, key))
         st.rerun()
+    note = f" {settings.usage_note}" if settings.usage_note else ""
     st.caption(
-        "The AI orders and explains the playbook's causes and checks. It can't add findings. "
-        "Only totals and the playbook items are sent, never rows or campaign names, and nothing "
-        f"changes in your ad account. AI analyses left in this session: {left} of "
+        "AI reorders and explains the playbook's checks and causes. It can't add findings, and only "
+        f"totals and playbook text are sent.{note} AI analyses left in this session: {left} of "
         f"{service.MAX_RUNS_PER_SESSION}."
     )
-    if settings.usage_note:
-        st.caption(settings.usage_note)
     return marketing
 
 
@@ -290,30 +295,33 @@ def show_dashboard(result, diagnosis, source_name, settings, synthetic=False):
         st.html(render.ai_status_html(marketing.ai))
     with summary_slot:
         warnings = [issue.message for issue in result.warnings]
-        st.html(render.executive_html(executive.build(diagnosis, marketing, warnings, source_name, synthetic)))
+        summary = executive.build(diagnosis, marketing, warnings, source_name, synthetic, currency)
+        st.html(render.executive_html(summary, prior_label, current_label))
 
-    with st.expander("Detailed analysis: KPIs, decision tree, contributions, full playbook and data quality"):
-        st.subheader("Marketing diagnosis")
-        st.html(render.confirmed_findings_html(marketing))
+    with st.expander("Detailed analysis"):
+        numbers, playbook_tab, quality = st.tabs(["Numbers", "Playbook", "Data quality"])
+        with numbers:
+            st.subheader("Marketing diagnosis")
+            st.html(render.confirmed_findings_html(marketing))
 
-        st.subheader("KPI overview")
-        st.html(render.kpis_html(view.kpi_cards(diagnosis, currency), prior_label, current_label))
+            st.subheader("KPI overview")
+            st.html(render.kpis_html(view.kpi_cards(diagnosis, currency), prior_label, current_label))
 
-        st.subheader("Diagnostic decision tree")
-        st.caption(
-            "Dark outlines show the path the diagnostic followed. Grey boxes were calculated but not "
-            f"followed. Changes of {view.format_threshold(diagnosis.threshold)} or more are material."
-        )
-        st.html(render.tree_html(view.build_tree(diagnosis, currency)))
+            st.subheader("Diagnostic decision tree")
+            st.caption(
+                "Dark outlines show the path the diagnostic followed. Grey boxes were calculated but not "
+                f"followed. Changes of {view.format_threshold(diagnosis.threshold)} or more are material."
+            )
+            st.html(render.tree_html(view.build_tree(diagnosis, currency)))
 
-        show_contributions(diagnosis)
-
-        st.subheader("Possible causes, checks and actions")
-        st.html(render.possible_causes_html(marketing))
-        st.html(render.investigations_html(marketing))
-        st.html(render.actions_html(marketing))
-
-        show_data_quality(result.warnings, diagnosis)
+            show_contributions(diagnosis)
+        with playbook_tab:
+            st.subheader("Possible causes, checks and actions")
+            st.html(render.possible_causes_html(marketing))
+            st.html(render.investigations_html(marketing))
+            st.html(render.actions_html(marketing))
+        with quality:
+            show_data_quality(result.warnings, diagnosis)
 
     dates = result.data["date"]
     with report_slot:
@@ -339,18 +347,23 @@ def main():
     st.set_page_config(page_title="Funnel Magnet", layout="wide")
     st.html(render.style_tag())
     st.html(render.header_html())
-    st.info(view.DECISION_SUPPORT_NOTICE)
+    st.info(PAGE_NOTICE)
 
     selected = select_source()
-    st.sidebar.header("Data settings")
-    blanks_are_zero = st.sidebar.checkbox(
-        "Blank Meta action cells mean zero",
-        value=False,
-        help=(
-            "Tick only if you know this export leaves zero actions blank. Otherwise blanks "
-            "stay missing and are never counted as zero."
-        ),
-    )
+    # Sidebar order: Data, Comparison, then the rarely needed settings under Advanced.
+    comparison = st.sidebar.container()
+    advanced = st.sidebar.expander("Advanced")
+    blanks_are_zero = False
+    if selected is None or not selected[2]:
+        # Only an uploaded export can have blank action cells.
+        blanks_are_zero = advanced.checkbox(
+            "Blank Meta action cells mean zero",
+            value=False,
+            help=(
+                "Tick only if you know this export leaves zero actions blank. Otherwise blanks "
+                "stay missing and are never counted as zero."
+            ),
+        )
 
     if selected is None:
         st.info("Upload a Meta Ads daily export in the sidebar, or choose a sample scenario.")
@@ -360,7 +373,7 @@ def main():
         if not result.ok:
             show_load_errors(result)
         else:
-            settings = select_comparison(result.data, source_name)
+            settings = select_comparison(result.data, source_name, comparison, advanced)
             if settings is not None:
                 try:
                     diagnosis = run_diagnosis(result.data, **settings)

@@ -130,12 +130,20 @@ def test_app_opens_on_a_sample_without_errors():
         "Possible causes, checks and actions",
         "Data quality",
     ]
-    # Level 1 sits on the page, and everything else is in one collapsed expander.
-    assert [e.label for e in app.expander] == ["Detailed analysis: KPIs, decision tree, contributions, full playbook and data quality"]
-    detail = app.expander[0]
-    assert [item.value for item in detail.subheader][0] == "Marketing diagnosis"
+    # Level 1 sits on the page. Everything else is in one collapsed expander with three tabs.
+    detail = next(e for e in app.expander if e.label == "Detailed analysis")
+    assert [tab.label for tab in detail.tabs] == ["Numbers", "Playbook", "Data quality"]
+    numbers, playbook_tab, quality = detail.tabs
+    assert [item.value for item in numbers.subheader] == [
+        "Marketing diagnosis", "KPI overview", "Diagnostic decision tree", "ROAS contribution",
+    ]
+    assert [item.value for item in playbook_tab.subheader] == ["Possible causes, checks and actions"]
+    assert [item.value for item in quality.subheader] == ["Data quality"]
     assert any("fm-executive" in item.body for item in app.main.get("html")) and not any(
         "fm-executive" in item.body for item in detail.get("html"))
+    # The secondary settings sit under Advanced in the sidebar.
+    advanced = next(e for e in app.sidebar.expander if e.label == "Advanced")
+    assert [item.label for item in advanced.number_input] == ["Materiality threshold (%)"]
 
 
 def test_without_a_key_the_button_is_off_and_the_dashboard_works(monkeypatch):
@@ -274,7 +282,7 @@ def test_public_defaults_keep_every_core_feature_working(monkeypatch):
     assert not [button for button in app.button if button.label == "Prioritise with AI"]
     assert not [item for item in app.expander if item.label == "Evidence available to the AI"]
     assert download_button(app)
-    assert any(view.DECISION_SUPPORT_NOTICE == item.value for item in app.info)
+    assert any("Possible causes are not confirmed." in item.value for item in app.info)
 
 
 def test_csv_upload_works_with_ai_off():
@@ -294,7 +302,8 @@ def test_account_level_inr_export_runs_end_to_end(monkeypatch):
     app = upload(start(), fixture.read_text("utf-8-sig"))
 
     assert not app.exception and not app.error
-    assert widget(app.selectbox, "Campaign").options == ["All campaigns"]
+    # An account-level export has no campaigns to choose, so no campaign menu is shown.
+    assert not [item for item in app.selectbox if item.label == "Campaign"]
     text = page_text(app)
     assert "₹" in text and "€" not in text
     assert "account-level total" in text
@@ -331,7 +340,7 @@ def test_exact_export_bytes_load_through_the_upload_widget():
 
     assert not app.exception and not app.error
     assert "account-level total" in page_text(app)
-    assert widget(app.selectbox, "Campaign").options == ["All campaigns"]
+    assert not [item for item in app.selectbox if item.label == "Campaign"]
 
 
 def test_an_upload_rejected_by_older_code_is_read_again_after_an_update(monkeypatch):
@@ -469,8 +478,13 @@ def test_session_limit_stops_further_calls(monkeypatch):
     assert "This session has used its 3 AI analyses" in page_text(app)
 
 
-def test_blank_cell_checkbox_starts_unchecked():
-    assert widget(start().checkbox, "Blank Meta action cells mean zero").value is False
+def test_blank_cell_checkbox_starts_unchecked_and_only_for_uploads():
+    app = start()
+    assert not [item for item in app.checkbox if item.label == "Blank Meta action cells mean zero"]
+
+    widget(app.radio, "Data source").set_value("Upload CSV")
+    app.run()
+    assert widget(app.checkbox, "Blank Meta action cells mean zero").value is False
 
 
 def test_every_sample_can_be_selected_in_the_interface():
@@ -557,13 +571,13 @@ def test_uploaded_file_is_diagnosed():
     assert "KPI overview" in [item.value for item in app.subheader]
     # Uploaded results are labelled as the user's own file, never as the synthetic demo.
     assert "Your uploaded data: export.csv." in page_text(app)
-    assert "Synthetic demonstration data" not in page_text(app)
+    assert "Synthetic sample data" not in page_text(app)
 
 
 def test_sample_results_are_labelled_synthetic():
     text = page_text(start())
 
-    assert "Synthetic demonstration data: the “CPM inflation” sample scenario." in text
+    assert "Synthetic sample data (“CPM inflation”), not real campaign results." in text
     assert "Your uploaded data" not in text
 
 
@@ -681,8 +695,6 @@ def test_every_sidebar_control_works(monkeypatch):
     capture_reports(monkeypatch)
     app = start()
 
-    widget(app.checkbox, "Blank Meta action cells mean zero").check()
-    app.run()
     widget(app.number_input, "Materiality threshold (%)").set_value(10.0)
     app.run()
     for period in ("Monthly", "Weekly"):

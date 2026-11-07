@@ -1,24 +1,32 @@
-"""Level 1: a plain-English executive diagnosis, written only by Python templates.
+"""Level 1: a short executive diagnosis, written only by Python templates.
 
-Everything here restates the engine's figures and the playbook diagnosis that the
-detailed analysis shows, so it adds no finding. No AI writes any of it. When AI has
-prioritised the diagnosis, the top three checks and the next steps follow that order.
+It answers three questions: what changed, what needs attention, and what to investigate
+next. Everything here restates the engine's figures and the playbook diagnosis that the
+detailed analysis shows, so it adds no finding, and no AI writes any of it. When AI has
+prioritised the diagnosis, the investigations and their actions follow that order.
 """
 
 import re
 from dataclasses import dataclass
+from functools import lru_cache
 
+from funnel_magnet import playbook
 from funnel_magnet.diagnose import Status
 from funnel_magnet.ui import view
 
 NEXT_STEPS = 3
 STAGE_CHECKS = 4
+# ROAS plus at most this many KPIs in the "What changed?" tiles.
+EXTRA_TILES = 3
+# The mechanism chains shown, largest effect first.
+MECHANISMS = 2
 # Both sides must be at least this share of the larger side to "largely cancel out".
 CANCEL_RATIO = 0.5
 SHARE_NOTE = (
-    "\u201c% of all movement\u201d is each KPI\u2019s part of all ROAS movement in both directions added "
+    "“% of all movement” is each KPI’s part of all ROAS movement in both directions added "
     "together, not a share of the net ROAS change."
 )
+WHERE = {True: "In your upload", False: "Collect outside this app"}
 
 
 @dataclass(frozen=True)
@@ -31,16 +39,36 @@ class ProblemKpi:
 
 
 @dataclass(frozen=True)
+class NextStep:
+    """A possible cause the top three checks test, with its action if the evidence supports it."""
+
+    cause: str
+    statement: str
+    checks: tuple[tuple[int, str], ...]
+    action: str
+    # Causes with a near-identical action, folded into this step. Each keeps its own
+    # action in the detailed analysis.
+    related: tuple[str, ...] = ()
+    # The priority of the check this step was chosen for.
+    origin: int = 0
+
+
+@dataclass(frozen=True)
 class TopCheck:
     rank: int
     title: str
     where: str
-    what: str
-    why_first: str
     look_at: str
-    readings: tuple[str, ...]
+    why_first: str
+    # The possible cause this check could support, the result that would support it,
+    # and the action to consider if it does. Empty when no promoted cause belongs here.
+    cause: str
+    supports_if: str
+    action: str
+    related: tuple[str, ...]
+    # Secondary interpretations and what to do if the result is unclear, shown folded.
+    other_readings: tuple[str, ...]
     if_unclear: str
-    ai_note: str = ""
 
 
 @dataclass(frozen=True)
@@ -51,44 +79,18 @@ class StageCheck:
 
 
 @dataclass(frozen=True)
-class NextStep:
-    cause: str
-    statement: str
-    checks: tuple[tuple[int, str], ...]
-    action: str
-    # Causes with a near-identical action, folded into this step. Each keeps its own
-    # action in the detailed analysis.
-    related: tuple[str, ...] = ()
-
-    @property
-    def text(self):
-        """The hypothesis, how to test it and what to consider, in the playbook's own words."""
-        checks = _join(f"\u201c{title}\u201d (priority {rank})" for rank, title in self.checks)
-        text = (
-            f"{self.statement} Test it with {checks}. "
-            f"If the evidence supports it, {self.action[0].lower()}{self.action[1:]}"
-        )
-        if self.related:
-            text += (
-                f" The same checks also bear on {_join(self.related)}, which leads to a similar action; "
-                "its own action is in the detailed analysis."
-            )
-        return text
-
-
-@dataclass(frozen=True)
 class ExecutiveSummary:
     headline: str
-    narrative: tuple[str, ...]
+    tiles: tuple[view.Kpi, ...]
+    mechanisms: tuple[str, ...]
+    cancel: str
     problems: tuple[ProblemKpi, ...]
+    data_notes: tuple[str, ...]
     checks: tuple[TopCheck, ...]
     next_steps: tuple[NextStep, ...]
-    data_notes: tuple[str, ...]
-    ai_relationship: str = ""
+    stage_checks: tuple[tuple[str, tuple[StageCheck, ...]], ...] = ()
     source: str = ""
     synthetic: bool = False
-    stage_checks: tuple[tuple[str, tuple[StageCheck, ...]], ...] = ()
-    share_note: str = ""
 
 
 def _join(items, word="and"):
@@ -148,46 +150,46 @@ def _path_to(diagnosis, metric):
     return next((path for path in diagnosis.paths if path[-1] == metric), (metric,))
 
 
-def _movement(diagnosis, move, drivers, status):
-    """How one final KPI's change reached ROAS, in figures.
-
-    A KPI between it and ROAS is named only when it moved the same way, so an offset
-    step, such as a CPC that fell while CPM rose, is never said to carry the change.
-    """
-    change = diagnosis.changes[move.metric]
-    plain = view.PLAIN_NAMES.get(move.metric)
-    subject = f"{plain[0].upper()}{plain[1:]} ({move.label})" if plain else move.label
-    verb = "rose" if (change.pct_change or 0) > 0 else "fell"
-    sentence = f"{subject} {verb} {abs(change.pct_change or 0):.1%}"
-    middle = [diagnosis.changes[m] for m in reversed(_path_to(diagnosis, move.metric)[1:-1])]
-    middle = [c for c in middle if c.status is status]
-    if middle:
-        sentence += f", feeding into {_join(_named(c) for c in middle)}"
-    driver = drivers.get(move.metric)
-    if driver is not None:
-        effect = "took" if driver.contribution < 0 else "added"
-        sentence += f", and {effect} {abs(driver.contribution):.2f} {'off' if driver.contribution < 0 else 'to'} ROAS"
-    return sentence + "."
+def _tile(diagnosis, metric, currency):
+    change = diagnosis.changes[metric]
+    return view.Kpi(
+        metric,
+        view.metric_label(metric),
+        view.format_value(metric, change.prior, currency),
+        view.format_value(metric, change.current, currency),
+        view.format_change(change.pct_change),
+        change.status,
+    )
 
 
-def _narrative(diagnosis, marketing):
+def _tiles(diagnosis, marketing, currency):
+    """ROAS, then the KPIs that explain it: the worsened and improved final KPIs first,
+    then the KPIs between them and ROAS on the diagnostic path."""
+    finals = [move.metric for move in (*marketing.problems, *marketing.beneficial)]
+    between = [m for metric in finals for m in reversed(_path_to(diagnosis, metric)[1:-1])]
+    chosen = list(dict.fromkeys(m for m in (*finals, *between) if m in diagnosis.changes))[:EXTRA_TILES]
+    return tuple(_tile(diagnosis, metric, currency) for metric in ("roas", *chosen))
+
+
+def _mechanisms(diagnosis, marketing):
+    """The diagnostic path each final KPI followed to ROAS, such as
+    "CPM +18.3% → CPC +17.1% → CPA +16.8% → ROAS −0.64 points"."""
     if not diagnosis.assessable:
         return ()
     drivers = {driver.metric: driver for driver in diagnosis.drivers}
-    sentences = [_movement(diagnosis, move, drivers, Status.DETERIORATED) for move in marketing.problems]
-    sentences += [_movement(diagnosis, move, drivers, Status.IMPROVED) for move in marketing.beneficial]
-    roas = diagnosis.changes["roas"]
-    prior, current = (view.format_value("roas", value) for value in (roas.prior, roas.current))
-    if marketing.problems and roas.status is not Status.DETERIORATED:
-        movement = "still rose" if roas.status is Status.IMPROVED else "held steady"
-        problem = "the problem" if len(marketing.problems) == 1 else "these problems"
-        sentences.append(f"Overall, ROAS {movement}, from {prior} to {current}, which can hide {problem}.")
-    else:
-        sentences.append(f"Overall, ROAS went from {prior} to {current}.")
-    sentences += _cancelling(diagnosis)
-    sentences += marketing.patterns
-    sentences.append("These figures show what changed, not why.")
-    return tuple(sentences)
+    moves = list(marketing.problems)
+    # When ROAS held or rose, the gain that hid the problems belongs in the picture too.
+    if marketing.problems and diagnosis.changes["roas"].status is not Status.DETERIORATED:
+        moves += list(marketing.beneficial[:1])
+    chains = []
+    for move in moves[:MECHANISMS]:
+        path = _path_to(diagnosis, move.metric)
+        steps = [f"{view.metric_label(m)} {view.format_change(diagnosis.changes[m].pct_change)}" for m in reversed(path[1:])]
+        driver = drivers.get(move.metric)
+        if driver is not None:
+            steps.append(f"ROAS {driver.contribution:+.2f} points")
+        chains.append(" → ".join(steps))
+    return tuple(chains)
 
 
 def _cancelling(diagnosis):
@@ -195,11 +197,11 @@ def _cancelling(diagnosis):
     gains = sum(d.contribution for d in diagnosis.drivers if d.contribution > 0)
     losses = -sum(d.contribution for d in diagnosis.drivers if d.contribution < 0)
     if not gains or not losses or min(gains, losses) < CANCEL_RATIO * max(gains, losses):
-        return []
-    return [
-        f"These movements largely cancel out: across all KPIs, the gains added {gains:.2f} to ROAS and "
-        f"the losses took {losses:.2f} off, so the net change was only {gains - losses:+.2f}."
-    ]
+        return ""
+    return (
+        f"Gains of {gains:.2f} and losses of {losses:.2f} ROAS points largely cancel out, "
+        f"leaving a net change of only {gains - losses:+.2f}."
+    )
 
 
 def _problems(diagnosis, marketing):
@@ -209,28 +211,11 @@ def _problems(diagnosis, marketing):
     for move in marketing.problems:
         driver = drivers.get(move.metric)
         effect = (
-            f"Took {abs(driver.contribution):.2f} off ROAS, {driver.weight:.0%} of all movement."
+            f"Took {abs(driver.contribution):.2f} off ROAS."
             if driver is not None and driver.contribution < 0 else ""
         )
         items.append(ProblemKpi(move.label, move.change, effect, hidden, view.WHY_IT_MATTERS.get(move.metric, "")))
     return tuple(items)
-
-
-def _checks(marketing):
-    return tuple(
-        TopCheck(
-            rank,
-            item.title,
-            "In your upload" if item.available else "Collect outside this app",
-            item.detail,
-            item.reason,
-            item.look_at,
-            item.readings,
-            item.if_unclear,
-            item.ai_note,
-        )
-        for rank, item in enumerate(marketing.top_investigations, 1)
-    )
 
 
 def _stems(text):
@@ -246,47 +231,30 @@ def _overlaps(first, second, actions):
     return shared_title >= 0.5 and len(shared_action) >= 2
 
 
-def _stage_checks(marketing):
-    """Checks aimed at each worsened funnel stage that the top three leave out."""
-    top = {item.id for item in marketing.top_investigations}
-    order = {item.id: item for item in marketing.investigations}
-    stages = []
-    for label, ids in marketing.stage_checks:
-        items = [order[i] for i in order if i in ids and i not in top][:STAGE_CHECKS]
-        if items:
-            where = lambda item: "In your upload" if item.available else "Collect outside this app"
-            stages.append((label, tuple(StageCheck(i.title, where(i), i.look_at) for i in items)))
-    return tuple(stages)
-
-
 def _next_steps(marketing):
-    """Conditional actions for causes the top three checks test.
+    """One possible cause for each of the top three checks, with its action if supported.
 
-    The checks take turns in their priority order, each offering its next cause in the
-    diagnosis's cause order, so the steps cover more than one check. The full action
-    plan for every cause stays in the detailed analysis.
+    Each check offers the first cause it tests, in the diagnosis's cause order, that isn't
+    already shown. A cause whose usual explanation relies on a movement that went the
+    other way isn't promoted: it stays in the detailed analysis and the check offers its
+    next cause instead, never an unrelated one. A cause with a near-identical action to
+    one already shown is folded into that one as related.
     """
     actions = {action.cause: action for action in marketing.actions}
     top = marketing.top_investigations
-    # A cause whose usual explanation relies on a movement that went the other way isn't
-    # promoted. It stays in the detailed analysis, and its slot goes to the next cause the
-    # same checks test, never to an unrelated one.
-    queues = [
-        [c.title for c in marketing.causes if c.title in item.tests and c.title in actions and not c.contradicted]
-        for item in top
-    ]
-    chosen, related = [], {}
-    while len(chosen) < NEXT_STEPS and any(queues):
-        for queue in queues:
-            while queue and (queue[0] in chosen or any(queue[0] in r for r in related.values())):
-                queue.pop(0)
-            if queue and len(chosen) < NEXT_STEPS:
-                cause = queue.pop(0)
-                twin = next((c for c in chosen if _overlaps(c, cause, actions)), None)
-                if twin:
-                    related[twin] = (*related.get(twin, ()), cause)
-                else:
-                    chosen.append(cause)
+    chosen, related, origin = [], {}, {}
+    for rank, item in enumerate(top, 1):
+        queue = [c.title for c in marketing.causes if c.title in item.tests and c.title in actions and not c.contradicted]
+        for cause in queue:
+            if cause in chosen or any(cause in r for r in related.values()):
+                continue
+            twin = next((c for c in chosen if _overlaps(c, cause, actions)), None)
+            if twin:
+                related[twin] = (*related.get(twin, ()), cause)
+                continue
+            chosen.append(cause)
+            origin[cause] = rank
+            break
     statements = {cause.title: cause.statement for cause in marketing.causes}
     return tuple(
         NextStep(
@@ -295,16 +263,103 @@ def _next_steps(marketing):
             tuple((rank, item.title) for rank, item in enumerate(top, 1) if cause in item.tests),
             actions[cause].if_supported,
             related.get(cause, ()),
+            origin[cause],
         )
         for cause in chosen
     )
 
 
+# Readings that say a cause became less likely don't describe a supporting result.
+WEAKENING = re.compile(r"\b(?:less likely|unlikely|barely)\b", re.IGNORECASE)
+
+
+# Title words too common to show that a reading is about one particular cause.
+GENERIC_TITLE_STEMS = frozenset({"accou", "campa", "chang", "shift", "probl"})
+
+
+@lru_cache(maxsize=1)
+def _cause_titles():
+    return tuple(cause["title"].lower() for cause in playbook.load_playbook().causes)
+
+
+def _about(reading, cause):
+    """True when a reading refers to this cause, by its title or a distinctive title word,
+    and doesn't name a different playbook cause instead."""
+    lowered = reading.lower()
+    title = cause.lower()
+    if title in lowered:
+        return True
+    if any(other in lowered for other in _cause_titles() if other != title and other not in title):
+        return False
+    stems = {word[:5] for word in re.findall(r"[a-z]+", title) if len(word) > 3} - GENERIC_TITLE_STEMS
+    return any(stem in lowered for stem in stems)
+
+
+def _best_reading(readings, step):
+    """The index of the reading that would support the step's cause, or None when none does.
+
+    Readings that make a cause less likely never count as support, and neither does a
+    reading about a different cause, so a card never borrows another cause's evidence.
+    """
+    supporting = [i for i, reading in enumerate(readings) if not WEAKENING.search(reading)]
+    if step is None:
+        return supporting[0] if supporting else None
+    about = [i for i in supporting if _about(readings[i], step.cause)]
+    if not about:
+        return None
+    words = _stems(f"{step.cause} {step.statement}")
+    return max(about, key=lambda i: (len(_stems(readings[i]) & words), -i))
+
+
+def _neutral(cause):
+    """A conditional line for a card with no reading about its cause."""
+    name = cause if cause[1:2].isupper() else cause[0].lower() + cause[1:]
+    return f"If this check's results point to {name}, that would support this possible cause."
+
+
+def _checks(marketing, steps):
+    """The top three, each with the result that would support its cause and the action."""
+    cards = []
+    for rank, item in enumerate(marketing.top_investigations, 1):
+        step = next((s for s in steps if s.origin == rank), None)
+        pick = _best_reading(item.readings, step)
+        cards.append(
+            TopCheck(
+                rank=rank,
+                title=item.title,
+                where=WHERE[item.available],
+                look_at=item.look_at,
+                why_first=item.reason,
+                cause=step.cause if step else "",
+                supports_if=item.readings[pick] if pick is not None else (_neutral(step.cause) if step else ""),
+                action=step.action if step else "",
+                related=step.related if step else (),
+                other_readings=tuple(r for i, r in enumerate(item.readings) if i != pick),
+                if_unclear=item.if_unclear,
+            )
+        )
+    return tuple(cards)
+
+
+def _stage_checks(marketing):
+    """Checks aimed at each worsened funnel stage that the top three leave out."""
+    top = {item.id for item in marketing.top_investigations}
+    order = {item.id: item for item in marketing.investigations}
+    stages = []
+    for label, ids in marketing.stage_checks:
+        items = [order[i] for i in order if i in ids and i not in top][:STAGE_CHECKS]
+        if items:
+            stages.append((label, tuple(StageCheck(i.title, WHERE[i.available], i.look_at) for i in items)))
+    return tuple(stages)
+
+
 def _data_notes(messages):
+    """One short line per kind of warning. The full messages are under Data quality."""
     notes = []
     for group, items in view.group_warnings(messages).items():
-        more = f" ({len(items) - 1} more in the detailed analysis)" if len(items) > 1 else ""
-        notes.append(f"{group}: {items[0]}{more}")
+        first = re.split(r"(?<=\.)\s", items[0], maxsplit=1)[0]
+        more = f" (+{len(items) - 1} more)" if len(items) > 1 else ""
+        notes.append(f"{group}: {first}{more}")
     return tuple(notes)
 
 
@@ -333,25 +388,23 @@ def source_text(source_name, synthetic):
     if not source_name:
         return ""
     if synthetic:
-        return (
-            f"Synthetic demonstration data: the \u201c{source_name}\u201d sample scenario. "
-            "These figures are invented to show the method and are not real campaign results."
-        )
-    return f"Your uploaded data: {source_name}. Every figure here comes from this file only."
+        return f"Synthetic sample data (“{source_name}”), not real campaign results."
+    return f"Your uploaded data: {source_name}."
 
 
-def build(diagnosis, marketing, warnings=(), source_name="", synthetic=False):
+def build(diagnosis, marketing, warnings=(), source_name="", synthetic=False, currency=None):
     """Return the executive diagnosis for the same diagnosis the detailed analysis shows."""
+    steps = _next_steps(marketing)
     return ExecutiveSummary(
         headline=_headline(diagnosis, marketing),
-        narrative=_narrative(diagnosis, marketing),
+        tiles=_tiles(diagnosis, marketing, currency) if diagnosis.assessable else (),
+        mechanisms=_mechanisms(diagnosis, marketing),
+        cancel=_cancelling(diagnosis),
         problems=_problems(diagnosis, marketing),
-        checks=_checks(marketing),
-        next_steps=_next_steps(marketing),
         data_notes=_data_notes([*warnings, *diagnosis.warnings]),
-        ai_relationship=marketing.ai.relationship if marketing.ai else "",
+        checks=_checks(marketing, steps),
+        next_steps=steps,
+        stage_checks=_stage_checks(marketing),
         source=source_text(source_name, synthetic),
         synthetic=synthetic,
-        stage_checks=_stage_checks(marketing),
-        share_note=SHARE_NOTE if any(p.effect for p in _problems(diagnosis, marketing)) else "",
     )

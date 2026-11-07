@@ -2,7 +2,7 @@
 
 import re
 from datetime import date
-from html import escape
+from html import escape, unescape
 
 import pytest
 
@@ -37,66 +37,79 @@ ALL = [*(s.name for s in SAMPLES), "Sep-Oct"]
 
 @pytest.mark.parametrize("granularity", [WEEKLY, MONTHLY])
 @pytest.mark.parametrize("name", [s.name for s in SAMPLES])
-def test_every_scenario_keeps_every_problem_and_the_same_top_three(name, granularity):
-    diagnosis, marketing, _, warnings = scenario(name, granularity)
-    summary = executive.build(diagnosis, marketing, warnings)
+def test_every_scenario_answers_the_three_questions(name, granularity):
+    diagnosis, marketing, currency, warnings = scenario(name, granularity)
+    summary = executive.build(diagnosis, marketing, warnings, currency=currency)
 
+    # What changed: the headline, ROAS and at most three other KPIs, and the path to ROAS.
     assert summary.headline.startswith("ROAS")
-    # No materially worse final KPI is simplified away, and each says why it matters.
+    assert summary.tiles[0].label == "ROAS" and len(summary.tiles) <= 1 + executive.EXTRA_TILES
+    for chain in summary.mechanisms:
+        assert " → " in chain and chain.endswith("points")
+    # What needs attention: no materially worse final KPI is simplified away.
     assert [p.label for p in summary.problems] == [m.label for m in marketing.problems]
     assert all(p.why for p in summary.problems)
-    for move in marketing.problems:
-        assert move.label in " ".join(summary.narrative) or view.PLAIN_NAMES[move.metric] in summary.headline
+    # What to investigate: the same top three, each with a supporting result and an action.
     assert [c.title for c in summary.checks] == [i.title for i in marketing.top_investigations]
-    # Next steps are conditional, come from the playbook, and are tested by a top-three check.
     actions = {a.cause: a.if_supported for a in marketing.actions}
-    for step in summary.next_steps:
-        assert step.action == actions[step.cause]
-        assert f"If the evidence supports it, {step.action[0].lower()}{step.action[1:]}" in step.text
-        assert step.text.startswith(next(c.statement for c in marketing.causes if c.title == step.cause))
-        assert {title for _, title in step.checks} <= {c.title for c in summary.checks}
-        assert "supports " + step.cause not in step.text
-    assert len(summary.next_steps) <= executive.NEXT_STEPS
+    causes = {c.title: c for c in marketing.causes}
+    for check, item in zip(summary.checks, marketing.top_investigations):
+        if check.cause and check.supports_if == executive._neutral(check.cause):
+            assert set(check.other_readings) == set(item.readings)
+        else:
+            assert {check.supports_if, *check.other_readings} == set(item.readings)
+        if check.cause:
+            assert check.cause in item.tests and not causes[check.cause].contradicted
+            assert check.action == actions[check.cause]
     # Python's own sentences never claim a cause.
     assert not CAUSAL.search(summary.headline)
-    assert not any(CAUSAL.search(sentence) for sentence in summary.narrative if sentence not in marketing.patterns)
+    assert not any(CAUSAL.search(chain) for chain in summary.mechanisms)
 
 
 def test_falling_roas_names_the_biggest_drag():
-    summary = executive.build(*scenario("CPM inflation")[:2])
+    diagnosis, marketing, currency, _ = scenario("CPM inflation")
+    summary = executive.build(diagnosis, marketing, currency=currency)
 
     assert summary.headline == "ROAS fell 14.3%. The biggest drag was cost per 1,000 impressions (CPM up 18.3%)."
-    assert summary.narrative[0].startswith("Cost per 1,000 impressions (CPM) rose 18.3%, feeding into cost per click (CPC up 17.1%)")
-    assert not summary.problems[0].hidden
+    assert [t.label for t in summary.tiles] == ["ROAS", "CPM", "CPC", "CPA"]
+    assert summary.mechanisms == ("CPM +18.3% → CPC +17.1% → CPA +16.8% → ROAS -0.64 points",)
+    assert not summary.problems[0].hidden and summary.cancel == ""
 
 
 def test_stable_roas_with_an_offsetting_problem_is_flagged_as_hidden():
-    summary = executive.build(*scenario("Masked problem")[:2])
+    diagnosis, marketing, currency, _ = scenario("Masked problem")
+    summary = executive.build(diagnosis, marketing, currency=currency)
 
     assert summary.headline.startswith("ROAS held steady (+2.9%), but cost per 1,000 impressions (CPM up 18.3%) worsened.")
     assert "Gains in average order value are hiding it." in summary.headline
     assert [p.hidden for p in summary.problems] == [True]
-    assert any("which can hide the problem" in sentence for sentence in summary.narrative)
+    # The gain that hides the problem is shown with it.
+    assert [t.label for t in summary.tiles][:3] == ["ROAS", "CPM", "AOV"]
+    assert summary.mechanisms[1] == "AOV +20.1% → ROAS +0.92 points"
 
 
-def test_rising_roas_with_hidden_problems_names_both_and_the_link_between_them():
-    diagnosis, marketing, _, _ = scenario("Sep-Oct")
-    summary = executive.build(diagnosis, marketing)
+def test_rising_roas_with_hidden_problems_names_both():
+    diagnosis, marketing, currency, _ = scenario("Sep-Oct")
+    summary = executive.build(diagnosis, marketing, currency=currency)
 
     assert summary.headline.startswith("ROAS rose 14.7%, but cost per 1,000 impressions (CPM up 44.4%) and ")
     assert "purchases per checkout started (down 11.2%)" in summary.headline
     assert all(p.hidden for p in summary.problems) and len(summary.problems) == 2
-    # CPC and CPA improved, so the CPM sentence must not say CPM pushed them up.
-    assert summary.narrative[0] == "Cost per 1,000 impressions (CPM) rose 44.4%, and took 1.24 off ROAS."
-    assert all(pattern in summary.narrative for pattern in marketing.patterns)
-    assert "Overall, ROAS still rose, from 3.16 to 3.62, which can hide these problems." in summary.narrative
+    # The real diagnostic path, including the steps that moved the other way.
+    assert summary.mechanisms == (
+        "CPM +44.4% → CPC -3.0% → CPA -9.1% → ROAS -1.24 points",
+        "Checkout → Purchase -11.2% → CVR +6.7% → CPA -9.1% → ROAS -0.40 points",
+    )
+    # The playbook's note on how the problems may relate is in the detailed analysis.
+    assert all(pattern in render.possible_causes_html(marketing) for pattern in marketing.patterns)
 
 
 def test_healthy_control_says_nothing_worsened():
-    summary = executive.build(*scenario("Healthy control")[:2])
+    diagnosis, marketing, currency, _ = scenario("Healthy control")
+    summary = executive.build(diagnosis, marketing, currency=currency)
 
     assert summary.headline == "ROAS held steady (+1.4%), and no KPI worsened by 5% or more."
-    assert summary.problems == () and summary.next_steps == ()
+    assert summary.problems == () and summary.checks == () and [t.label for t in summary.tiles] == ["ROAS"]
 
 
 @pytest.mark.parametrize("name", ["Landing page issue", "Checkout friction"])
@@ -132,16 +145,26 @@ def test_readings_are_specific_rather_than_repeated():
     assert not any("makes that cause more likely" in reading for reading in readings)
 
 
-def test_level_one_shows_each_top_check_interpretation():
+def test_each_card_says_what_to_check_what_would_support_it_and_what_to_do():
     diagnosis, marketing, _, _ = scenario("CPM inflation")
-    summary = executive.build(diagnosis, marketing)
+    card = executive.build(diagnosis, marketing).checks[0]
+    item = marketing.top_investigations[0]
 
-    for check, item in zip(summary.checks, marketing.top_investigations):
-        assert (check.look_at, check.readings, check.if_unclear) == (item.look_at, item.readings, item.if_unclear)
-    assert summary.checks[0].readings[0] == (
-        "If CPM worsened mainly in one campaign, look for changes specific to that campaign, "
-        "such as its budget, bidding, audience or creative."
-    )
+    assert card.look_at == item.look_at and card.cause == "Account structure"
+    # No campaign-comparison reading is about account structure, so the card says so neutrally.
+    assert card.supports_if == "If this check's results point to account structure, that would support this possible cause."
+    assert card.action.startswith("Consolidate fragmented ad sets")
+    assert set(card.other_readings) == set(item.readings)
+    # The other readings and the uncertainty note are folded away on the page.
+    html = render.executive_html(executive.build(diagnosis, marketing))
+    folded = html[html.index("<details"):html.index("</details>")]
+    assert escape(card.if_unclear) in folded and all(escape(r) in folded for r in card.other_readings)
+
+
+def test_a_weakening_reading_is_never_shown_as_support():
+    diagnosis, marketing = uploaded_pattern()
+    for card in executive.build(diagnosis, marketing).checks:
+        assert not executive.WEAKENING.search(card.supports_if)
 
 
 def test_data_notes_are_short_and_complete():
@@ -167,17 +190,19 @@ def test_ai_prioritisation_reorders_level_one_but_not_the_headline():
     prioritised = prioritise.merge(marketing, reply, build_evidence(diagnosis, currency), "Groq", "openai/gpt-oss-120b")
     before, after = executive.build(diagnosis, marketing), executive.build(diagnosis, prioritised)
 
-    assert after.headline == before.headline and after.narrative == before.narrative
+    assert after.headline == before.headline and after.mechanisms == before.mechanisms
     assert after.problems == before.problems
     assert after.checks[0].title == "Account change history"
-    assert after.checks[0].ai_note.startswith("It could show whether")
-    assert after.next_steps[0].cause == "Budget scaling or bid strategy"
+    assert after.checks[0].cause == "Budget scaling or bid strategy"
+    # The AI's ranking commentary stays in the detailed analysis, not the summary.
+    assert "It could show whether" not in render.executive_html(after)
+    assert "It could show whether" in render.investigations_html(prioritised)
 
 
 @pytest.mark.parametrize("name", ALL)
 def test_page_and_report_show_the_same_executive_diagnosis(name):
     diagnosis, marketing, currency, warnings = scenario(name)
-    summary = executive.build(diagnosis, marketing, warnings)
+    summary = executive.build(diagnosis, marketing, warnings, currency=currency)
     page = render.executive_html(summary)
     html = report.build_report(report.ReportInput(
         diagnosis, build_evidence(diagnosis, currency), "File", "All campaigns", "a", "b", "c",
@@ -186,31 +211,39 @@ def test_page_and_report_show_the_same_executive_diagnosis(name):
     executive_part = html[html.index('<section class="executive">'):html.index('<h2 class="part">Detailed analysis</h2>')]
 
     assert html.index('<section class="executive">') < html.index("1. A. Confirmed findings")
-    pieces = [summary.headline, *summary.narrative, *summary.data_notes]
-    pieces += [part for p in summary.problems for part in (p.change, p.effect, p.why) if part]
-    pieces += [part for c in summary.checks for part in (c.title, c.what, c.look_at, *c.readings, c.if_unclear, c.why_first) if part]
-    pieces += [part for s in summary.next_steps for part in (s.text, s.cause)]
-    pieces += [part for _, checks in summary.stage_checks for c in checks for part in (c.title, c.look_at)]
-    pieces += [summary.share_note] if summary.share_note else []
-    for piece in pieces:
+    pieces = [summary.headline, *summary.mechanisms, *summary.data_notes, summary.cancel]
+    pieces += [p.why for p in summary.problems]
+    pieces += [part for c in summary.checks for part in (c.title, c.look_at, c.supports_if, c.cause, c.action)]
+    pieces += [c.title for _, checks in summary.stage_checks for c in checks]
+    for piece in filter(None, pieces):
         assert escape(piece) in page and escape(piece) in executive_part, piece
     assert page.count("Hidden by overall ROAS") == executive_part.count("Hidden by overall ROAS")
-    # Section C shows the same interpretation for every check, on the page and in the report.
+    # Every check's full interpretation is in section C on the page and section 3 in the report.
     section_c = render.investigations_html(marketing)
-    for item in marketing.investigations:
+    for item in marketing.other_investigations:
         for piece in (item.look_at, *item.readings, item.if_unclear):
             assert escape(piece) in section_c and escape(piece) in html
+    for item in marketing.top_investigations:
+        for piece in (item.look_at, *item.readings, item.if_unclear):
+            assert escape(piece) in page and escape(piece) in html
 
 
-def test_next_steps_read_as_plain_professional_english():
-    step = executive.build(*scenario("CTR decline")[:2]).next_steps[0]
+@pytest.mark.parametrize("name", [s.name for s in SAMPLES])
+def test_the_summary_stays_short(name):
+    diagnosis, marketing, currency, warnings = scenario(name)
+    html = render.executive_html(executive.build(diagnosis, marketing, warnings, name, True, currency), "a", "b")
+    visible = re.sub(r"<details.*?</details>", " ", html, flags=re.S)
+    words = len(unescape(re.sub(r"<[^>]+>", " ", visible)).split())
 
-    assert step.cause == "Creative fatigue"
-    assert step.text == (
-        "People may have seen the same ads too often, so fewer of them clicked. "
-        "Test it with “CTR for each ad” (priority 1) and “Frequency and reach over time” (priority 3). "
-        "If the evidence supports it, refresh or rotate the most-seen creatives, and consider a frequency cap."
-    )
+    assert words <= 400, words
+
+
+def test_card_wording_reads_as_plain_english():
+    card = executive.build(*scenario("CTR decline")[:2]).checks[0]
+
+    assert (card.title, card.cause) == ("CTR for each ad", "Creative fatigue")
+    assert card.supports_if == "If a few long-running ads lost most of their CTR, creative fatigue is a likely candidate."
+    assert card.action == "Refresh or rotate the most-seen creatives, and consider a frequency cap."
 
 
 @pytest.mark.parametrize("synthetic", [True, False])
@@ -224,13 +257,12 @@ def test_synthetic_and_uploaded_results_are_labelled_on_the_page_and_in_the_repo
     ))
 
     if synthetic:
-        assert summary.source.startswith("Synthetic demonstration data") and "not real campaign results" in summary.source
+        assert summary.source == "Synthetic sample data (\u201cCPM inflation\u201d), not real campaign results."
     else:
-        assert summary.source == "Your uploaded data: my_export.csv. Every figure here comes from this file only."
+        assert summary.source == "Your uploaded data: my_export.csv."
     assert escape(summary.source) in render.executive_html(summary) and escape(summary.source) in html
-    other = "Your uploaded data" if synthetic else "Synthetic demonstration data"
+    other = "Your uploaded data" if synthetic else "Synthetic sample data"
     assert other not in render.executive_html(summary) and other not in html
-
 
 
 # Presentation pass: event-based names, offsetting, merged steps and direct checkout checks.
@@ -245,10 +277,15 @@ def test_funnel_stages_are_described_as_event_ratios_not_people():
 def test_offsetting_movements_are_explained_in_plain_english():
     for name, net in (("Masked problem", "+0.14"), ("Sep-Oct", "+0.46")):
         summary = executive.build(*scenario(name)[:2])
-        sentence = next(s for s in summary.narrative if "largely cancel out" in s)
-        assert sentence.endswith(f"so the net change was only {net}.")
-        assert "not a share of the net ROAS change" in summary.share_note
-    assert not any("cancel out" in s for s in executive.build(*scenario("CPM inflation")[:2]).narrative)
+        assert "largely cancel out" in summary.cancel and summary.cancel.endswith(f"net change of only {net}.")
+    assert executive.build(*scenario("CPM inflation")[:2]).cancel == ""
+    # What "% of all movement" means is explained where the shares are shown.
+    diagnosis, marketing, currency, warnings = scenario("Masked problem")
+    html = report.build_report(report.ReportInput(
+        diagnosis, build_evidence(diagnosis, currency), "File", "All campaigns", "a", "b", "c",
+        date(2026, 11, 3), currency, warnings, marketing=marketing,
+    ))
+    assert escape(executive.SHARE_NOTE) in html
 
 
 def test_september_october_considers_checkout_checks_after_tracking():
@@ -284,7 +321,9 @@ def test_near_identical_next_steps_are_merged_but_kept_in_detail():
     payment = next(s for s in steps if s.cause == "Payment errors")
     assert payment.related == ("Payment options",)
     assert "Payment options" not in [s.cause for s in steps]
-    assert "also bear on Payment options" in payment.text
+    card = next(c for c in executive.build(diagnosis, prioritised).checks if c.cause == "Payment errors")
+    assert card.related == ("Payment options",)
+    assert "(related: Payment options)" in render.executive_html(executive.build(diagnosis, prioritised))
     # The detailed analysis still lists both causes and both actions.
     assert {"Payment errors", "Payment options"} <= {a.cause for a in prioritised.actions}
 
@@ -324,7 +363,8 @@ def test_saturation_is_not_promoted_when_ctr_rose_but_stays_in_detail():
     saturation = next(c for c in marketing.causes if c.id == "audience_saturation")
 
     assert "Audience saturation" not in [s.cause for s in summary.next_steps]
-    assert not any("lower CTR" in s.text for s in summary.next_steps)
+    assert not any("lower CTR" in s.statement for s in summary.next_steps)
+    assert not any(c.cause == "Audience saturation" for c in summary.checks)
     # Still a possibility in the detailed analysis, with the evidence stated plainly.
     assert saturation.contradicted
     assert dict((label, kind) for label, kind, _ in saturation.signs) == {"CTR": "contradicts", "CPM": "supports"}
@@ -336,7 +376,9 @@ def test_every_promoted_step_stays_tied_to_the_top_three():
     summary = executive.build(diagnosis, marketing)
     top = {c.title for c in summary.checks}
 
-    assert [s.cause for s in summary.next_steps] == ["Targeting, placement or audience shift", "Tracking problem", "Traffic quality"]
+    assert [s.cause for s in summary.next_steps] == ["Targeting, placement or audience shift", "Traffic quality", "Tracking problem"]
+    # Each card carries the cause chosen for it, so no check is left without an action.
+    assert [c.cause for c in summary.checks] == ["Targeting, placement or audience shift", "Traffic quality", "Tracking problem"]
     for step in summary.next_steps:
         assert {title for _, title in step.checks} <= top and step.checks
 
@@ -386,3 +428,41 @@ def test_page_and_report_show_the_same_evidence_note():
     note = next(text for _, kind, text in next(c for c in marketing.causes if c.id == "audience_saturation").signs if kind == "contradicts")
 
     assert escape(note) in render.possible_causes_html(marketing) and escape(note) in html
+
+
+
+def test_a_card_never_borrows_another_causes_evidence():
+    """Every supporting reading names its own cause; otherwise the card uses a neutral line."""
+    cases = [scenario(name)[:2] for name in ALL] + [uploaded_pattern()]
+    cases += [(d, playbook.build(d, "EUR", several_campaigns=False, earlier_periods=True)) for d, _ in cases[:7]]
+    for diagnosis, marketing in cases:
+        for card in executive.build(diagnosis, marketing).checks:
+            if not card.cause:
+                continue
+            neutral = card.supports_if == executive._neutral(card.cause)
+            assert neutral or executive._about(card.supports_if, card.cause), (card.title, card.cause, card.supports_if)
+            assert not executive.WEAKENING.search(card.supports_if)
+
+
+@pytest.mark.parametrize(
+    "name, title, cause, reading",
+    [
+        ("CPM inflation", "Compare earlier periods", "Seasonality",
+         "A similar change at the same point in earlier cycles may suggest seasonality, but it does not prove it."),
+        ("CTR decline", "Frequency and reach over time", "Audience saturation",
+         "If frequency rose while reach flattened or fell, the same people are seeing the ads more often, "
+         "which supports creative fatigue or audience saturation."),
+    ],
+)
+def test_a_reading_about_the_cause_is_chosen_over_a_neighbouring_one(name, title, cause, reading):
+    card = next(c for c in executive.build(*scenario(name)[:2]).checks if c.title == title)
+
+    assert (card.cause, card.supports_if) == (cause, reading)
+
+
+def test_a_reading_naming_a_different_cause_is_not_used():
+    diagnosis, marketing = uploaded_pattern()
+    card = next(c for c in executive.build(diagnosis, marketing).checks if c.title == "Results by placement")
+
+    assert card.cause == "Traffic quality"
+    assert card.supports_if == "If this check's results point to traffic quality, that would support this possible cause."

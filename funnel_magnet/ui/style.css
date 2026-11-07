@@ -208,3 +208,7 @@
 .fm-reading { margin: 4px 0 6px; }
 .fm-reading p { margin: 4px 0; }
 .fm-reading ul { margin: 0 0 4px; }
+.fm-question { color: var(--fm-ink); font-size: 1rem; font-weight: 700; margin: 14px 0 6px; }
+.fm-executive .fm-question:first-of-type { margin-top: 4px; }
+.fm-kpis.fm-kpis-compact { grid-template-columns: repeat(auto-fit, minmax(150px, 220px)); margin: 6px 0 8px; }
+.fm-mechanism { color: var(--fm-muted); font-size: 0.88rem; margin: 2px 0; }
