@@ -136,6 +136,13 @@ Rules:
 2. numbers_explained: one to three short points about what the calculations show.
    List the IDs of the facts each point relies on in evidence_ids. Use only numbers
    that appear in those facts, written the same way. Never calculate new numbers.
+   Never calculate or introduce a difference, sum or other figure of your own, such
+   as "+€14.49" for a change in order value. Use only the before and after values and
+   the percentage change exactly as a fact gives them.
+   When you explain the net change in ROAS, keep each KPI's contribution apart from
+   the total. The total includes every KPI's contribution, not just the largest
+   ones, so never present it as the result of two contributions. To state the total,
+   cite the business_summary or mathematical_diagnosis fact that gives it.
 3. possible_causes: up to two playbook causes that matter for the question, by
    cause_id. Every cause is unconfirmed: say "may", "could" or "possible". Never say a
    cause happened, was found, is confirmed or is the reason.

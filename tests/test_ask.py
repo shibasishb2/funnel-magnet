@@ -559,3 +559,91 @@ def test_the_chat_sees_the_checks_in_the_order_the_page_shows(name):
     context = context_for(name)
     assert [c.title for c in context.summary.checks] == [i.title for i in context.checks[:len(context.summary.checks)]]
     assert [c["title"] for c in ask.payload("x", context)["checks"]] == [i.title for i in context.checks]
+
+
+# ---------------------------------------------------------------- the rejected live reply (Masked problem)
+
+def _cancel_fact(context):
+    return next(f.id for f in context.evidence.facts if f.kind == "business_summary" and "cancelled out" in f.statement)
+
+
+def live_masked_reply():
+    """The reply Groq gave in the live test, word for word, with the IDs it cited."""
+    return {
+        "in_scope": True,
+        "numbers_explained": [
+            {"text": "ROAS stayed almost the same (+2.9%) while average order value rose 20.1% (+€14.49) and cost per "
+                     "1,000 impressions (CPM) rose 18.3% (+€2.16).", "evidence_ids": ["M1", "M2", "M6"]},
+            {"text": "The higher AOV added about €0.92 to each euro of spend, but the higher CPM removed about €0.85, so "
+                     "the net gain was only €0.14 per euro.", "evidence_ids": ["D1", "D2"]},
+            {"text": "Clicks became slightly more expensive (CPC +17.1%) and cost per acquisition (CPA) rose 16.8%, even "
+                     "though click-through rate (CTR) was stable.", "evidence_ids": ["M4", "M3", "M5", "M7"]},
+        ],
+        "possible_causes": [
+            {"cause_id": "auction_competition", "text": "Higher competition in the auction may have pushed CPM up."},
+            {"cause_id": "seasonality", "text": "Seasonal demand could also have increased impression costs."},
+        ],
+        "next_check": {"check_id": "campaign_split", "text": "If CPM differs by campaign, it shows whether the cost rise "
+                       "is isolated to one campaign or due to a shift in spend across campaigns."},
+    }
+
+
+def test_the_live_ids_mean_what_the_model_assumed():
+    context = context_for("Masked problem")
+    assert [fact_id(context, "metric", m) for m in ("roas", "aov", "cpa", "cpc", "cvr", "cpm", "ctr")] == \
+        ["M1", "M2", "M3", "M4", "M5", "M6", "M7"]
+    assert [fact_id(context, "mathematical_driver", m) for m in ("aov", "cpm")] == ["D1", "D2"]
+
+
+def test_the_rejected_live_reply_is_still_rejected_for_exactly_its_three_figures():
+    context = context_for("Masked problem")
+    answer = ask.answer("Explain these results simply.", context, lambda: Mock(live_masked_reply()))
+
+    assert answer.kind == ask.KIND_VERIFIED
+    assert answer.issues == (
+        "Point 1 contains a number that is not in the evidence: 14.49.",
+        "Point 1 contains a number that is not in the evidence: 2.16.",
+        "Point 2 contains a number that is not in the evidence: 0.14.",
+    )
+    html = render.answer_html(answer)
+    assert "14.49" not in html and "2.16" not in html and "net gain was only" not in html
+
+
+@pytest.mark.parametrize("text, ids", [
+    # A difference the model worked out: 86.59 - 72.10.
+    ("Average order value rose 20.1% (+€14.49).", ["M2"]),
+    # Another: 13.95 - 11.79.
+    ("Cost per 1,000 impressions (CPM) rose 18.3% (+€2.16).", ["M6"]),
+    # A real total cited only to the two largest contributions, whose own sum is 0.07.
+    ("Order value added €0.92 and CPM removed €0.85, so the net gain was only €0.14.", ["D1", "D2"]),
+])
+def test_each_invented_or_misattributed_figure_is_rejected(text, ids):
+    context = context_for("Masked problem")
+    reply = {**live_masked_reply(), "numbers_explained": [{"text": text, "evidence_ids": ids}]}
+    answer = ask.answer("Explain these results simply.", context, lambda: Mock(reply))
+    assert answer.kind == ask.KIND_VERIFIED and any("not in the evidence" in i for i in answer.issues), answer.issues
+
+
+def test_the_total_is_accepted_when_it_cites_its_own_evidence():
+    context = context_for("Masked problem")
+    total = _cancel_fact(context)
+    reply = live_masked_reply()
+    reply["numbers_explained"] = [
+        {"text": "Return on ad spend (ROAS) held steady (+2.9%). Average order value rose 20.1%, from €72.10 to €86.59, "
+                 "and cost per 1,000 impressions (CPM) rose 18.3%, from €11.79 to €13.95.", "evidence_ids": ["M1", "M2", "M6"]},
+        {"text": "Higher order value added €0.92 for each €1 of ad spend, and higher CPM took away €0.85.",
+         "evidence_ids": ["D1", "D2"]},
+        {"text": "Counting every KPI, improvements added €1.01 and problems took away €0.87, so the net change was only +€0.14.",
+         "evidence_ids": [total]},
+    ]
+    answer = ask.answer("Explain these results simply.", context, lambda: Mock(reply))
+    assert answer.kind == ask.KIND_AI, answer.issues
+    assert "Business summary" in answer.points[2].refs
+
+
+def test_the_prompt_forbids_own_figures_and_separates_contributions_from_the_total():
+    prompt = " ".join(ask.SYSTEM_PROMPT.split())
+    assert "Never calculate or introduce a difference, sum or other figure of your own" in prompt
+    assert "keep each KPI's contribution apart from the total" in prompt
+    assert "never present it as the result of two contributions" in prompt
+    assert "cite the business_summary or mathematical_diagnosis fact that gives it" in prompt
