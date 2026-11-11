@@ -1,14 +1,17 @@
 """Streamlit entry point for the Funnel Magnet diagnostic prototype."""
 
+import hashlib
 import io
+import os
 from datetime import date
+from html import escape
 
 import pandas as pd
 import streamlit as st
 from streamlit.errors import StreamlitSecretNotFoundError
 
 from funnel_magnet import __version__, playbook
-from funnel_magnet.ai import prioritise, service
+from funnel_magnet.ai import ask, prioritise, service
 from funnel_magnet.ai.evidence import build_evidence
 from funnel_magnet.ai.providers import AIError
 from funnel_magnet.diagnose import DEFAULT_MATERIALITY_THRESHOLD, run_diagnosis
@@ -23,7 +26,7 @@ ALL_CAMPAIGNS = "All campaigns"
 GRANULARITIES = {"Weekly": WEEKLY, "Monthly": MONTHLY}
 PRIVACY_NOTICE = (
     "**Demo data only.** Upload synthetic or anonymized exports, never client data or personal "
-    "information. The file is read in this app's memory and isn't saved. AI prioritisation sends "
+    "information. The file is read in this app's memory and isn't saved. AI answers send "
     "Groq only totals and playbook text, never rows, campaign names or file names."
 )
 # The full decision-support notice is in the report. The page keeps one short line.
@@ -31,6 +34,10 @@ PAGE_NOTICE = "Decision support: it shows what changed and what to check. Possib
 SESSION_LIMIT_MESSAGE = (
     "This session has used its {limit} AI analyses. The diagnosis below is complete without AI."
 )
+ASK_TITLE = "Ask Funnel Magnet AI"
+ASK_LIMIT_MESSAGE = "This session has used its {limit} AI questions. Definitions are still answered from the glossary."
+# Answers shown at once. Older ones scroll away, and only the last two are sent as context.
+ASK_SHOWN = 8
 
 
 # The cache is shared by every visitor, so keep it small on a public server. It is keyed
@@ -245,6 +252,79 @@ def show_ai_priorities(marketing, evidence, assessable):
     return marketing
 
 
+def prioritisation_visible():
+    """AI prioritisation stays in the code but is hidden unless FM_SHOW_PRIORITISATION is "true"."""
+    value = read_secrets().get("FM_SHOW_PRIORITISATION") or os.environ.get("FM_SHOW_PRIORITISATION", "")
+    return str(value).strip().lower() == "true"
+
+
+def ask_provider(settings):
+    """Return a provider for one question, or a sentence saying why the model can't be used now.
+
+    Called only when a question needs the model, so definitions never use the allowance.
+    """
+    if settings.unavailable_reason:
+        return settings.unavailable_reason
+    used = st.session_state.get("ask_runs", 0)
+    if used >= ask.MAX_QUESTIONS_PER_SESSION:
+        return ASK_LIMIT_MESSAGE.format(limit=ask.MAX_QUESTIONS_PER_SESSION)
+    # The same shared allowance as AI prioritisation, so together they stay inside the free plan.
+    blocked = usage_limiter().acquire()
+    if blocked:
+        return blocked
+    st.session_state["ask_runs"] = used + 1
+    provider = service.create_provider(settings)
+    if hasattr(provider, "max_completion_tokens"):
+        provider.max_completion_tokens = ask.QA_MAX_COMPLETION_TOKENS
+        provider.schema_name = "funnel_magnet_answer"
+    return provider
+
+
+def show_ask_ai(context, context_key):
+    """A chat about this diagnosis. Its history clears whenever the data or comparison changes."""
+    if st.session_state.get("ask_key") != context_key:
+        st.session_state["ask_key"] = context_key
+        st.session_state["ask_history"] = []
+    history = st.session_state["ask_history"]
+    settings = service.load_settings(read_secrets())
+
+    with st.expander(ASK_TITLE, expanded=bool(history)):
+        st.caption(ask.PRIVACY_NOTE)
+        if settings.unavailable_reason:
+            st.caption(
+                f"{settings.unavailable_reason} Definitions still work, and other questions get a verified "
+                "explanation from the calculations."
+            )
+        else:
+            left = max(0, ask.MAX_QUESTIONS_PER_SESSION - st.session_state.get("ask_runs", 0))
+            note = f" {settings.usage_note}" if settings.usage_note else ""
+            st.caption(
+                "Definitions come from the glossary and are always free. Answers about these results are "
+                f"checked against the calculations.{note} AI questions left in this session: {left} of "
+                f"{ask.MAX_QUESTIONS_PER_SESSION}."
+            )
+        pending = None
+        suggestions = ask.suggestions(context)
+        # One row per pair, so on a phone the buttons stack in reading order.
+        for start in range(0, len(suggestions), 2):
+            for column, number in zip(st.columns(2), range(start, min(start + 2, len(suggestions)))):
+                if column.button(suggestions[number], key=f"ask-suggestion-{number}"):
+                    pending = suggestions[number]
+        for turn in history[-ASK_SHOWN:]:
+            with st.chat_message("user"):
+                st.html(f'<p class="fm-question-asked">{escape(turn.question)}</p>')
+            with st.chat_message("assistant"):
+                st.html(render.answer_html(turn))
+        # A fixed height, because inside an expander the default grows to fill a tall box.
+        typed = st.chat_input("Ask about these results", key="ask-input", max_chars=ask.MAX_QUESTION_CHARS, height=72)
+        question = pending or typed
+        if question:
+            with st.spinner("Answering..."):
+                reply = ask.answer(question, context, lambda: ask_provider(settings), history)
+            history.append(reply)
+            st.rerun()
+
+
 def show_report_button(report_input):
     st.download_button(
         "Download Diagnostic Report",
@@ -256,7 +336,7 @@ def show_report_button(report_input):
     )
 
 
-def show_dashboard(result, diagnosis, source_name, settings, synthetic=False):
+def show_dashboard(result, diagnosis, source_name, settings, synthetic=False, data_digest=""):
     currency = result.currency
     scope = settings["campaign"] or ALL_CAMPAIGNS
     single_campaign = settings["campaign"] is not None
@@ -290,13 +370,23 @@ def show_dashboard(result, diagnosis, source_name, settings, synthetic=False):
     # Level 1 is drawn after the AI control runs, so it shows any AI prioritisation.
     st.subheader("Business summary")
     summary_slot = st.container()
-    marketing = show_ai_priorities(marketing, evidence, diagnosis.assessable)
-    if marketing.ai:
-        st.html(render.ai_status_html(marketing.ai))
+    if prioritisation_visible():
+        marketing = show_ai_priorities(marketing, evidence, diagnosis.assessable)
+        if marketing.ai:
+            st.html(render.ai_status_html(marketing.ai))
     with summary_slot:
         warnings = [issue.message for issue in result.warnings]
         summary = executive.build(diagnosis, marketing, warnings, source_name, synthetic, currency)
         st.html(render.executive_html(summary, prior_label, current_label))
+
+    # Any change of data, scenario, campaign, periods or threshold gives a new key.
+    context_key = "|".join(
+        str(part) for part in (
+            source_name, data_digest, settings["granularity"], prior_label, current_label,
+            settings["campaign"], settings["threshold"], evidence.fingerprint(),
+        )
+    )
+    show_ask_ai(ask.build_context(diagnosis, marketing, summary, evidence, currency), context_key)
 
     with st.expander("Technical details"):
         numbers, playbook_tab, quality, glossary = st.tabs(["Numbers", "Playbook", "Data quality", "Glossary"])
@@ -382,7 +472,8 @@ def main():
                 except ValueError as error:
                     st.error(str(error))
                 else:
-                    show_dashboard(result, diagnosis, source_name, settings, synthetic)
+                    digest = hashlib.sha256(raw).hexdigest()
+                    show_dashboard(result, diagnosis, source_name, settings, synthetic, digest)
 
     st.caption(f"ESCP MBA prototype, version {__version__}. Use synthetic or anonymized data only.")
 

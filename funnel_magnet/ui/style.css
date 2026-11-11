@@ -226,3 +226,15 @@
 @media (max-width: 640px) {
   .fm-info-body { position: fixed; left: 16px; right: 16px; top: auto; bottom: 16px; width: auto; max-height: 60vh; overflow-y: auto; }
 }
+/* Ask Funnel Magnet AI: calculated facts kept apart from possible causes */
+.fm-answer { color: var(--fm-text); font-size: 0.92rem; overflow-wrap: anywhere; }
+.fm-answer ul { margin: 2px 0 8px; padding-left: 18px; }
+.fm-answer li { margin: 3px 0; }
+.fm-answer p { margin: 4px 0; }
+.fm-answer-label { color: var(--fm-ink); font-weight: 700; margin: 8px 0 2px !important; }
+.fm-answer-label span { color: var(--fm-muted); font-size: 0.78rem; font-weight: 400; margin-left: 4px; }
+.fm-ref { display: inline-block; background: var(--fm-soft); border: 1px solid var(--fm-line); border-radius: 4px; color: var(--fm-muted); font-size: 0.72rem; padding: 0 5px; margin: 1px 2px 1px 0; white-space: nowrap; }
+.fm-answer-note { background: #fff3e0; border-radius: 4px; color: #8a3b00; padding: 4px 8px; }
+.fm-answer-source { color: var(--fm-muted); font-size: 0.78rem; border-top: 1px solid var(--fm-line); padding-top: 4px; margin-top: 8px !important; }
+.fm-question-asked { margin: 0; overflow-wrap: anywhere; }
+.fm-answer-lead { color: var(--fm-ink); font-weight: 700; }

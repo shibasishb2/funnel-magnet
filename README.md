@@ -2,9 +2,9 @@
 
 AI Marketing Performance Diagnostic Agent: an ESCP MBA prototype that diagnoses changes in Meta Ads performance.
 
-**Status:** Stages 0 to 4 are complete, and the app runs as a public demonstration on Streamlit Community Cloud. Python finds the problem KPIs, and a marketing playbook supplies possible causes, checks and conditional actions. An optional AI step only orders and explains them, and AI is off by default.
+**Status:** Stages 0 to 4 are complete, and the app runs as a public demonstration on Streamlit Community Cloud. Python finds the problem KPIs, and a marketing playbook supplies possible causes, checks and conditional actions. **Ask Funnel Magnet AI** answers beginner questions about the result: definitions come from the glossary, and other answers are checked against the calculations. AI is off by default.
 
-Use synthetic or anonymized data only. The upload panel says so before any file is chosen, and AI prioritisation sends Groq only totals and playbook text, never rows, campaign names or file names. Groq stores data in the United States, so client or personal data must not be uploaded to the demonstration.
+Use synthetic or anonymized data only. The upload panel says so before any file is chosen, and AI answers send Groq only totals and playbook text, never rows, campaign names or file names. Groq stores data in the United States, so client or personal data must not be uploaded to the demonstration.
 
 Results are decision support for a person to review. They are not automatically verified causal conclusions.
 
@@ -103,7 +103,41 @@ The detailed analysis holds one four-part diagnosis, built by `funnel_magnet/pla
 
 The playbook lives in `funnel_magnet/playbook.toml` and can be edited without changing code. The tests reject a playbook with an unhedged cause, an unknown metric or a missing reference.
 
-## AI prioritisation
+## Ask Funnel Magnet AI
+
+A collapsed **Ask Funnel Magnet AI** section sits below the business summary and above Technical details. It is for business students and managers without performance marketing knowledge. It offers four suggested questions, such as "Explain these results simply." and "What does ROAS mean?", and a box for typing a question. The third suggestion follows the result: "Why did ROAS fall?" when ROAS fell, and "Why is this a problem if ROAS improved?" when a problem is hidden behind a steady or rising ROAS.
+
+`funnel_magnet/ai/ask.py` routes each question:
+
+1. **Screened locally.** A question with an email address, a phone number or wording aimed at the assistant itself, such as "ignore previous instructions" or "API key", is never sent.
+2. **Glossary, free.** A definition or formula question, such as "What does CPM mean?" or "How is CTR calculated?", is answered from the verified glossary with this comparison's own figures. It makes no API call and works when AI is off or its allowance is used.
+3. **Groq, checked.** Other questions go to Groq `openai/gpt-oss-120b` with the question, the last two exchanges (cut short), the calculated facts, the business summary sentences and the playbook's causes and top checks. CSV rows, campaign names and file names are never sent.
+
+Every answer keeps three parts apart: **What the numbers show** (each point tagged with the calculations it relies on), **Possible causes** (marked not confirmed) and **Suggested next check** (a playbook check). The reply must use strict structured output, cite fact IDs for every calculated point, and name causes and checks only by their playbook IDs.
+
+The AI answer is replaced as a whole by a **verified explanation**, written by Python from the same summary and playbook, if any part:
+
+- states a number that isn't in the facts it cites
+- says a KPI, including ROAS, moved the opposite way to the calculation
+- presents a cause as fact, confirmed or proven, or rates how likely it is
+- gives advice the playbook doesn't, such as cutting a budget, or an action that isn't conditional on a check
+- names a cause or check outside the playbook, claims a metric the data doesn't have, or mentions instructions, keys or links
+
+Three rules keep answers consistent with the page:
+
+- A question asking whether a cause is proven or confirmed always opens with a Python-written "No": the data shows what changed, not why, and a check can only support or weaken a possible cause.
+- When ROAS moved by less than the materiality threshold, an answer must say it "held steady", as the business summary does. Saying it rose, fell or improved sends the answer to the verified explanation.
+- An answer to "what should I investigate first?" must name the page's own Check 1, and shows the playbook's reason for ranking it first. The chat receives the same diagnosis, causes and check order as the page.
+
+A request that fails, times out or is refused for its limits also gets the verified explanation, with the reason. Nothing is retried automatically. An out-of-scope question shows no model text. Withheld wording is logged under `funnel_magnet.ai.review` for development review.
+
+The chat clears whenever the scenario, uploaded file, campaign, period type, compared periods or materiality threshold changes. Answers are not added to the report.
+
+Each browser session allows 5 AI questions. They share the app-wide allowance of one request a minute and 25 a day with AI prioritisation. A question uses up to about 4,500 tokens: about 3,000 for the prompt and at most 1,500 for the answer.
+
+## AI prioritisation (hidden)
+
+The public page no longer shows **Prioritise with AI**. The feature is unchanged in the code and its tests, and `FM_SHOW_PRIORITISATION = "true"` shows it again.
 
 The diagnosis in sections A to D is complete without AI. **Prioritise with AI** asks a model to order and explain the playbook's possible causes and checks for the current comparison. It can't make a diagnosis of its own.
 
@@ -163,6 +197,7 @@ Google's Gemini API terms require paid use for an app made available to users in
 | Setting | Default | Purpose |
 |---|---|---|
 | `FM_AI_ENABLED` | `false` | Must be `true` before any live AI call is possible |
+| `FM_SHOW_PRIORITISATION` | `false` | Shows the hidden **Prioritise with AI** button again |
 | `AI_PROVIDER` | `gemini` | `gemini` or `groq` |
 | `GROQ_API_KEY` | None | Server-side Groq key |
 | `GROQ_MODEL` | `openai/gpt-oss-120b` | Groq model name |

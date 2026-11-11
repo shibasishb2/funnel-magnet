@@ -155,6 +155,10 @@ def strict_schema(schema):
 
 class GroqProvider:
     name = "Groq"
+    # Per-feature settings. AI prioritisation keeps these defaults; short answers lower
+    # the completion budget so each request uses less of the shared allowance.
+    max_completion_tokens = GROQ_MAX_COMPLETION_TOKENS
+    schema_name = "ai_diagnosis"
 
     def __init__(self, api_key, model, client=None):
         self.model = model
@@ -180,13 +184,13 @@ class GroqProvider:
             "response_format": {
                 "type": "json_schema",
                 "json_schema": {
-                    "name": "ai_diagnosis",
+                    "name": self.schema_name,
                     "strict": True,
                     "schema": strict_schema(inline_refs(json_schema(schema))),
                 },
             },
             "temperature": TEMPERATURE,
-            "max_completion_tokens": GROQ_MAX_COMPLETION_TOKENS,
+            "max_completion_tokens": self.max_completion_tokens,
             "reasoning_effort": GROQ_REASONING_EFFORT,
             "include_reasoning": False,
         }

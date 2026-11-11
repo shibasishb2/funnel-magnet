@@ -373,3 +373,44 @@ def glossary_html(help, mechanisms=()):
         + (f'<div class="fm-ai-heading">The diagnostic path in this comparison</div><ul>{paths}</ul>' if paths else "")
         + "</section>"
     )
+
+
+# ---------------------------------------------------------------- Ask Funnel Magnet AI
+
+ANSWER_HEADINGS = {
+    "points": ("What the numbers show", "calculated from the data"),
+    "glossary": ("Definition", "from the verified glossary"),
+    "causes": ("Possible causes", "not confirmed: each needs investigating"),
+    "next": ("Suggested next check", "from the marketing playbook"),
+}
+
+
+def _answer_heading(key):
+    title, tag = ANSWER_HEADINGS[key]
+    return f'<p class="fm-answer-label">{escape(title)} <span>{escape(tag)}</span></p>'
+
+
+def answer_html(answer):
+    """One answer, with what the data shows kept apart from possible causes."""
+    parts = []
+    # A direct answer such as "No." comes first, before any notice about how it was produced.
+    if getattr(answer, "lead", ""):
+        parts.append(f'<p class="fm-answer-lead">{escape(answer.lead)}</p>')
+    if answer.note:
+        parts.append(f'<p class="fm-answer-note">{escape(answer.note)}</p>')
+    if answer.points:
+        parts.append(_answer_heading("glossary" if answer.kind == "glossary" else "points"))
+        items = []
+        for point in answer.points:
+            refs = "".join(f'<span class="fm-ref">{escape(ref)}</span>' for ref in point.refs)
+            items.append(f"<li>{escape(point.text)} {refs}</li>")
+        parts.append(f"<ul>{''.join(items)}</ul>")
+    if answer.causes:
+        parts.append(_answer_heading("causes"))
+        parts.append("<ul>" + "".join(f"<li>{escape(cause)}</li>" for cause in answer.causes) + "</ul>")
+    if answer.next_check:
+        parts.append(_answer_heading("next"))
+        parts.append(f"<p>{escape(answer.next_check)}</p>")
+    if answer.source:
+        parts.append(f'<p class="fm-answer-source">{escape(answer.source)}</p>')
+    return f'<div class="fm-answer fm-answer-{escape(answer.kind)}">{"".join(parts)}</div>'
