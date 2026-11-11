@@ -157,8 +157,9 @@ def test_warnings_and_investigations_are_included():
     item = report_input()
     html = report.build_report(item)
 
+    # Warnings appear in plain English with the same substance.
     for text in item.diagnosis.warnings:
-        assert escape(view.humanize(text)) in html
+        assert escape(view.plain_warning(text)) in html
     for check in item.sections.investigations:
         assert escape(check.detail) in html
 

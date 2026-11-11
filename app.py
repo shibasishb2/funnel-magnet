@@ -150,7 +150,7 @@ def show_contributions(diagnosis):
         "and the bars sum exactly to the ROAS change. In the table, share of movement is each KPI's "
         "part of all ROAS movement in both directions added together, not a share of the net change."
     )
-    # Shown directly, because this sits inside the Detailed analysis tabs.
+    # Shown directly, because this sits inside the Technical details tabs.
     st.caption("Contribution table")
     st.dataframe(pd.DataFrame(view.driver_table(diagnosis)), hide_index=True)
 
@@ -158,7 +158,7 @@ def show_contributions(diagnosis):
 def show_data_quality(load_warnings, diagnosis):
     st.subheader("Data quality")
     messages = [issue.message for issue in load_warnings] + diagnosis.warnings
-    groups = view.group_warnings(messages)
+    groups = view.plain_warning_groups(messages)
     if not groups:
         st.success("No data quality warnings for this comparison.")
     for group, items in groups.items():
@@ -288,7 +288,7 @@ def show_dashboard(result, diagnosis, source_name, settings, synthetic=False):
     )
 
     # Level 1 is drawn after the AI control runs, so it shows any AI prioritisation.
-    st.subheader("Executive diagnosis")
+    st.subheader("Business summary")
     summary_slot = st.container()
     marketing = show_ai_priorities(marketing, evidence, diagnosis.assessable)
     if marketing.ai:
@@ -298,14 +298,14 @@ def show_dashboard(result, diagnosis, source_name, settings, synthetic=False):
         summary = executive.build(diagnosis, marketing, warnings, source_name, synthetic, currency)
         st.html(render.executive_html(summary, prior_label, current_label))
 
-    with st.expander("Detailed analysis"):
-        numbers, playbook_tab, quality = st.tabs(["Numbers", "Playbook", "Data quality"])
+    with st.expander("Technical details"):
+        numbers, playbook_tab, quality, glossary = st.tabs(["Numbers", "Playbook", "Data quality", "Glossary"])
         with numbers:
             st.subheader("Marketing diagnosis")
             st.html(render.confirmed_findings_html(marketing))
 
             st.subheader("KPI overview")
-            st.html(render.kpis_html(view.kpi_cards(diagnosis, currency), prior_label, current_label))
+            st.html(render.kpis_html(view.kpi_cards(diagnosis, currency), prior_label, current_label, summary.help))
 
             st.subheader("Diagnostic decision tree")
             st.caption(
@@ -322,6 +322,8 @@ def show_dashboard(result, diagnosis, source_name, settings, synthetic=False):
             st.html(render.actions_html(marketing))
         with quality:
             show_data_quality(result.warnings, diagnosis)
+        with glossary:
+            st.html(render.glossary_html(summary.help, summary.mechanisms))
 
     dates = result.data["date"]
     with report_slot:

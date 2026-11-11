@@ -82,15 +82,17 @@ Choose a sample scenario or upload a Meta Ads daily export in the sidebar, then 
 
 ## Marketing diagnosis
 
-The page opens with a short **executive diagnosis** for marketers and business owners, built by `funnel_magnet/ui/executive.py` from Python templates only. It answers three questions:
+The page opens with a short **business summary** for marketers, business owners and students new to performance marketing, built by `funnel_magnet/ui/executive.py` from Python templates only. It answers three questions:
 
-- **What changed?** A headline with the ROAS movement and any problem hidden by stable or rising ROAS, ROAS and up to three KPIs that explain it, the diagnostic path to ROAS (such as CPM → CPC → CPA → ROAS), and a note when gains and losses largely cancel out.
-- **What needs attention?** Every KPI that worsened materially, with why it matters in plain business terms, and one line for each kind of data warning.
-- **What should I investigate next?** The top three checks, each with what to look at, the result that would support a possible cause, and the action to consider if it does. Other possible results and what to do if the result is unclear are folded away. Funnel problems also list the direct checks for that stage, after tracking.
+- **What changed?** A headline in business terms (how much recorded sales each unit of ad spend brought back), any problem hidden by stable or rising return on ad spend, ROAS and up to three KPIs that explain it, and a note when gains and losses largely cancel out.
+- **What needs attention?** Every KPI that worsened materially, what its movement did to the business, measured, and why it matters, plus each kind of data warning in plain English.
+- **What should I check next?** The top three checks, each with what to check, the evidence to look for, the possible cause it would point to, and the action to consider if the evidence supports it. Other possible results and what to do if the result is unclear are folded away. Funnel problems also list the direct checks for that stage, after tracking.
 
 It restates the same diagnosis as the detailed analysis and adds no finding. A cause whose usual explanation is contradicted by the measured KPIs isn't promoted, and near-identical causes are shown together as related. After AI prioritisation, the checks and their causes follow the AI's order, while the headline and figures stay as Python wrote them. The AI's own explanations are in the detailed analysis. A label says whether the figures are a synthetic sample or the user's uploaded file.
 
-Everything else is in the collapsed **Detailed analysis** section, in three tabs: **Numbers** (confirmed findings, all KPI cards, the decision tree, the contribution chart and table), **Playbook** (the four-part diagnosis's causes, checks and actions) and **Data quality**. The sidebar keeps the data source and the comparison, and puts the materiality threshold and the blank-cells setting for uploads under **Advanced**. The report shows the executive diagnosis first, then the complete detailed analysis.
+Each KPI has a small **i** icon that opens its full name, meaning, formula and an example with this comparison's own figures.
+
+Everything else is in the collapsed **Technical details** section, in four tabs: **Numbers** (confirmed findings, all KPI cards, the decision tree, the contribution chart and table), **Playbook** (the four-part diagnosis's causes, checks and actions), **Data quality** and **Glossary** (every KPI and funnel step, how they fit together, and the diagnostic path in figures). The sidebar keeps the data source and the comparison, and puts the materiality threshold and the blank-cells setting for uploads under **Advanced**. The report shows the executive diagnosis first, then the complete detailed analysis.
 
 The detailed analysis holds one four-part diagnosis, built by `funnel_magnet/playbook.py` with no AI:
 

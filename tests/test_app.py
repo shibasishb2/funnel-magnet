@@ -122,7 +122,7 @@ def test_app_opens_on_a_sample_without_errors():
     assert not app.exception
     assert "Funnel Magnet" in page_text(app)
     assert [item.value for item in app.subheader] == [
-        "Executive diagnosis",
+        "Business summary",
         "Marketing diagnosis",
         "KPI overview",
         "Diagnostic decision tree",
@@ -131,9 +131,10 @@ def test_app_opens_on_a_sample_without_errors():
         "Data quality",
     ]
     # Level 1 sits on the page. Everything else is in one collapsed expander with three tabs.
-    detail = next(e for e in app.expander if e.label == "Detailed analysis")
-    assert [tab.label for tab in detail.tabs] == ["Numbers", "Playbook", "Data quality"]
-    numbers, playbook_tab, quality = detail.tabs
+    detail = next(e for e in app.expander if e.label == "Technical details")
+    assert [tab.label for tab in detail.tabs] == ["Numbers", "Playbook", "Data quality", "Glossary"]
+    numbers, playbook_tab, quality, glossary = detail.tabs
+    assert any("KPI glossary" in item.body for item in glossary.get("html"))
     assert [item.value for item in numbers.subheader] == [
         "Marketing diagnosis", "KPI overview", "Diagnostic decision tree", "ROAS contribution",
     ]
@@ -306,7 +307,7 @@ def test_account_level_inr_export_runs_end_to_end(monkeypatch):
     assert not [item for item in app.selectbox if item.label == "Campaign"]
     text = page_text(app)
     assert "₹" in text and "€" not in text
-    assert "account-level total" in text
+    assert "analysed as one total" in text
     assert download_button(app)
     assert "₹" in built[-1] and "€" not in built[-1]
 
@@ -339,7 +340,7 @@ def test_exact_export_bytes_load_through_the_upload_widget():
     app = upload_bytes(start(), data)
 
     assert not app.exception and not app.error
-    assert "account-level total" in page_text(app)
+    assert "analysed as one total" in page_text(app)
     assert not [item for item in app.selectbox if item.label == "Campaign"]
 
 
@@ -361,7 +362,7 @@ def test_an_upload_rejected_by_older_code_is_read_again_after_an_update(monkeypa
     monkeypatch.setattr(version, "code_version", lambda: "after-update")
     after = upload_bytes(start(), data)
     assert not after.exception and not after.error
-    assert "account-level total" in page_text(after)
+    assert "analysed as one total" in page_text(after)
 
 
 def test_groq_can_be_chosen_as_the_provider(monkeypatch):

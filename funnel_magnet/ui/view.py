@@ -1,6 +1,7 @@
 """Turn engine results into display-ready values, with no Streamlit dependency."""
 
 import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -471,4 +472,163 @@ def group_warnings(messages):
             OTHER_WARNINGS,
         )
         groups.setdefault(group, []).append(humanize(message))
+    return groups
+
+
+# ---------------------------------------------------------------- KPI glossary
+# Each entry matches metrics.py exactly: full name, what it means, and its formula.
+# CVR is per link click, not per visitor, and CPM is per 1,000 impressions.
+GLOSSARY = {
+    "roas": ("Return on ad spend", "How much recorded sales value each unit of ad spend brought back.",
+             "Purchase value ÷ ad spend"),
+    "aov": ("Average order value", "The average value of each recorded purchase.", "Purchase value ÷ purchases"),
+    "cpa": ("Cost per purchase", "How much ad spend it took to get one recorded purchase. Also called cost per acquisition.",
+            "Ad spend ÷ purchases"),
+    "cpc": ("Cost per link click", "How much each click on an ad's link cost.", "Ad spend ÷ link clicks"),
+    "cvr": ("Conversion rate", "How many recorded purchases each link click produced.", "Purchases ÷ link clicks"),
+    "cpm": ("Cost per 1,000 impressions", "What it cost to show the ads 1,000 times.", "Ad spend ÷ impressions × 1,000"),
+    "ctr": ("Link click-through rate", "How often an ad being shown led to a click on its link.", "Link clicks ÷ impressions"),
+    "link_clicks_to_landing_page_views": ("Landing page views per link click",
+                                          "How many landing page loads were recorded for each link click.",
+                                          "Landing page views ÷ link clicks"),
+    "landing_page_views_to_add_to_carts": ("Add-to-carts per landing page view",
+                                           "How many add-to-cart events were recorded for each landing page view.",
+                                           "Adds to cart ÷ landing page views"),
+    "add_to_carts_to_checkouts_initiated": ("Checkouts started per add to cart",
+                                            "How many checkouts were started for each add-to-cart event.",
+                                            "Checkouts initiated ÷ adds to cart"),
+    "checkouts_initiated_to_purchases": ("Purchases per checkout started",
+                                         "How many purchases were recorded for each checkout started.",
+                                         "Purchases ÷ checkouts initiated"),
+}
+# How the KPIs fit together, exactly as the decision tree splits them.
+KPI_RELATIONSHIPS = (
+    "ROAS = AOV ÷ CPA",
+    "CPA = CPC ÷ CVR",
+    "CPC = CPM ÷ (1,000 × CTR)",
+    "CVR = the funnel steps multiplied together, from link click to purchase",
+)
+# Meta counts events, so funnel steps are ratios of event counts, not of unique people.
+GLOSSARY_NOTE = (
+    "All figures come from the Meta Ads export. Purchases and purchase value are the ones Meta "
+    "credited to the ads, and funnel steps compare counts of recorded events, not unique people."
+)
+
+
+def full_name(metric):
+    """Like "Cost per 1,000 impressions (CPM)", or a funnel step's plain name."""
+    if metric in METRIC_LABELS:
+        return f"{GLOSSARY[metric][0]} ({METRIC_LABELS[metric]})"
+    return GLOSSARY[metric][0] if metric in GLOSSARY else metric_label(metric)
+
+
+def _amount(metric, value, currency):
+    return format_value(metric, value, currency)
+
+
+def kpi_example(change, currency=None):
+    """One sentence with this comparison's own figures, such as
+    "Showing the ads 1,000 times cost €13.95, up from €11.79." Empty when undefined."""
+    metric = change.metric
+    if change.current is None or change.prior is None:
+        return ""
+    now, before = _amount(metric, change.current, currency), _amount(metric, change.prior, currency)
+    unit = format_value("aov", 1, currency).replace("1.00", "1")
+    per_hundred = lambda value: f"{value * 100:.2f}".rstrip("0").rstrip(".")
+    symbol = unit[:-1]
+    money = lambda value: f"{symbol}{value:,.2f}"
+    if unit == "1":
+        # No currency in the file, so speak of units of spend.
+        unit = "unit"
+    templates = {
+        "roas": f"Each {unit} of ad spend brought back {money(change.current)} in recorded sales, compared with {money(change.prior)} before.",
+        "aov": f"The average recorded purchase was worth {now}, compared with {before} before.",
+        "cpa": f"Each recorded purchase cost {now} in ad spend, compared with {before} before.",
+        "cpc": f"Each link click cost {now}, compared with {before} before.",
+        "cvr": f"{per_hundred(change.current)} purchases were recorded for every 100 link clicks, compared with {per_hundred(change.prior)} before.",
+        "cpm": f"Showing the ads 1,000 times cost {now}, compared with {before} before.",
+        "ctr": f"{per_hundred(change.current)} link clicks were recorded for every 100 impressions, compared with {per_hundred(change.prior)} before.",
+        "link_clicks_to_landing_page_views": "{} landing page views were recorded for every 100 link clicks, compared with {} before.",
+        "landing_page_views_to_add_to_carts": "{} add-to-cart events were recorded for every 100 landing page views, compared with {} before.",
+        "add_to_carts_to_checkouts_initiated": "{} checkouts were started for every 100 add-to-cart events, compared with {} before.",
+        "checkouts_initiated_to_purchases": "{} purchases were recorded for every 100 checkouts started, compared with {} before.",
+    }
+    template = templates.get(metric, "")
+    if "_to_" in metric:
+        return template.format(per_hundred(change.current), per_hundred(change.prior))
+    return template
+
+
+# ---------------------------------------------------------------- Plain-English data warnings
+# Plain titles for the warning groups, in the same order and with the same meaning.
+GROUP_TITLES = {
+    "Funnel data": "Website funnel data",
+    "Low purchase volume": "Few purchases",
+    "Attribution": "How purchases are credited to ads (attribution)",
+    "Undefined metrics": "Figures that can't be calculated",
+    OTHER_WARNINGS: "Other data notes",
+}
+_UNDEFINED = {
+    "spend": "has no ad spend, so return on ad spend and the costs per purchase and per click can't be calculated for it.",
+    "purchases": ("recorded no purchases, so average order value and cost per purchase can't be calculated, "
+                  "and their effect on return on ad spend isn't measured."),
+    "link clicks": "recorded no link clicks, so cost per click and the conversion rate can't be calculated for it.",
+    "impressions": "recorded no impressions, so cost per 1,000 impressions and click-through rate can't be calculated for it.",
+}
+PLAIN_WARNINGS = (
+    (re.compile(r"^The (prior|current) period has zero (spend|purchases|link clicks|impressions)"),
+     lambda m: f"The {m[1]} period {_UNDEFINED[m[2]]}"),
+    (re.compile(r"^(.+) is above 100% in the (prior|current) period"),
+     lambda m: (f"The {m[1]} step shows more than 100% in the {m[2]} period, which can't happen in reality and "
+                "suggests a tracking or attribution problem. Treat this step with caution.")),
+    (re.compile(r"^These funnel stages are unavailable, so neighbouring stages were combined: (.+)\.$"),
+     lambda m: f"Some funnel steps aren't in the file ({m[1]}), so the steps either side of them are measured together."),
+    (re.compile(r"^At least one period has fewer than (\d+) purchases"),
+     lambda m: (f"At least one period has fewer than {m[1]} purchases. With so few sales, percentage changes can "
+                "swing a lot, so treat the results as a rough indication only.")),
+    (re.compile(r"^The (prior|current) period has data for (\d+) of (\d+) days"),
+     lambda m: (f"The {m[1]} period only has data for {m[2]} of its {m[3]} days. The missing days are treated as "
+                "days with no advertising, which can make that period look smaller than it was.")),
+    (re.compile(r"^(.+) is missing in (\d+) row\(s\) of the (prior|current) period"),
+     lambda m: (f"{m[1]} figures are missing in {m[2]} row(s) of the {m[3]} period, so that funnel step is left "
+                "out of the comparison rather than counted as zero.")),
+    (re.compile(r"^Attribution settings differ"),
+     lambda m: ("The two periods use different attribution settings (the rules Meta uses to credit purchases to "
+                "ads), so their purchase figures may not be directly comparable.")),
+    (re.compile(r"^The file has no attribution setting"),
+     lambda m: ("The export doesn't state its attribution setting (the rules Meta uses to credit purchases to ads), "
+                "so it can't be confirmed that both periods were counted the same way.")),
+    (re.compile(r"^The current period ended (\d+ days?) before this analysis, inside the (\d+)-day attribution window"),
+     lambda m: (f"The current period ended {m[1]} before this analysis, inside the {m[2]}-day attribution window. "
+                "Meta can still credit more purchases to it, so it may look weaker now than it will later.")),
+    (re.compile(r"^The current period ended (\d+ days?) before this analysis, and the file doesn't state"),
+     lambda m: (f"The current period ended {m[1]} before this analysis, and the export doesn't state its "
+                "attribution window, so it can't be confirmed that every purchase Meta will credit to it is included.")),
+    (re.compile(r"^Results combine several campaigns"),
+     lambda m: ("These results add all campaigns together. If spend moved between campaigns, the totals can change "
+                "even when no single campaign did. Pick one campaign in the sidebar to look at it on its own.")),
+    (re.compile(r"^The file has no campaign column"),
+     lambda m: ("The file has no campaign column, so the whole account is analysed as one total. "
+                "Campaign-by-campaign results aren't available.")),
+    (re.compile(r"^(.+) differs from the recalculated value in (\d+) row\(s\)"),
+     lambda m: (f"Meta's own {m[1]} figure differs from Funnel Magnet's calculation in {m[2]} row(s), probably "
+                "because it is defined differently. Funnel Magnet's calculation is used.")),
+)
+
+
+def plain_warning(message):
+    """The same warning in plain English, keeping its substance. Unknown messages are unchanged."""
+    text = humanize(message)
+    for pattern, rewrite in PLAIN_WARNINGS:
+        match = pattern.search(text)
+        if match:
+            return rewrite(match)
+    return text
+
+
+def plain_warning_groups(messages):
+    """group_warnings with plain titles and plain messages, in the same order."""
+    groups = {}
+    for group, items in group_warnings(messages).items():
+        groups[GROUP_TITLES.get(group, group)] = [plain_warning(item) for item in items]
     return groups

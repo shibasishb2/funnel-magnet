@@ -226,28 +226,28 @@ def _where(check):
 
 
 def _executive_section(item):
-    """Level 1, built by the same function as the dashboard's, from the same diagnosis.
-
-    It answers what changed, what needs attention and what to investigate next. Every
-    check's full interpretation, including the one for each top-three check, is in section 3.
+    """The business summary, built by the same function as the dashboard's, from the same
+    diagnosis. Every check's full interpretation is in section 3, and the glossary in section 8.
     """
     diagnosis = item.diagnosis
     summary = executive.build(diagnosis, item.sections, item.load_warnings, item.source_name, item.synthetic, item.currency)
+    help = dict(summary.help)
     source_class = "source source-synthetic" if summary.synthetic else "source"
     source = f'<p class="{source_class}">{escape(summary.source)}</p>' if summary.source else ""
     tiles = ""
     if summary.tiles:
         rows = [
-            f"<tr><td>{escape(t.label)}</td><td>{escape(t.prior)}</td><td>{escape(t.current)}</td>"
-            f'<td class="status-{STATUS_CLASSES[t.status]}">{escape(t.change)}</td></tr>'
+            f"<tr><td>{escape(help[t.metric][0] if t.metric in help else t.label)}</td><td>{escape(t.prior)}</td>"
+            f'<td>{escape(t.current)}</td><td class="status-{STATUS_CLASSES[t.status]}">{escape(t.change)}</td></tr>'
             for t in summary.tiles
         ]
-        tiles = _table(("KPI", diagnosis.prior_label or "Prior", diagnosis.current_label or "Current", "Change"), rows, "numbers")
-    mechanisms = "".join(f'<p class="note">{escape(chain)}</p>' for chain in summary.mechanisms)
+        tiles = _table(("Key figure", diagnosis.prior_label or "Prior", diagnosis.current_label or "Current", "Change"), rows, "numbers")
+    effects = "".join(f"<p>{escape(effect)}</p>" for effect in summary.effects)
     cancel = f"<p>{escape(summary.cancel)}</p>" if summary.cancel else ""
     problems = "".join(
-        f"<li><strong>{escape(p.change)}</strong>"
-        + (' <span class="hidden-problem">Hidden by overall ROAS</span>' if p.hidden else "")
+        f"<li><strong>{escape(p.name or p.label)}</strong>: {escape(p.change)}"
+        + (' <span class="hidden-problem">Hidden by the overall result</span>' if p.hidden else "")
+        + (f"<div>{escape(p.effect)}</div>" if p.effect else "")
         + (f'<div class="note">{escape(p.why)}</div>' if p.why else "")
         + "</li>"
         for p in summary.problems
@@ -255,35 +255,38 @@ def _executive_section(item):
     notes = "".join(f"<li>{escape(note)}</li>" for note in summary.data_notes)
     checks = "".join(
         '<article class="card exec-check">'
-        f'<div class="card-tag">Priority {c.rank} · {escape(c.where)}</div>'
-        f"<p><strong>{escape(c.title)}.</strong> {escape(c.look_at)}</p>"
+        f'<div class="card-tag">Check {c.rank} · {escape(c.where)}</div>'
+        f"<p><strong>{escape(c.title)}.</strong></p>"
+        f"<p><strong>What to check:</strong> {escape(c.look_at)}</p>"
+        + (f"<p><strong>Evidence to look for:</strong> {escape(c.supports_if)}</p>" if c.supports_if else "")
         + (
-            f"<p><strong>Would support {escape(c.cause)}"
+            f"<p><strong>Possible cause:</strong> {escape(c.cause)}"
             + (f" (related: {escape(', '.join(c.related))})" if c.related else "")
-            + f":</strong> {escape(c.supports_if)}</p><p><strong>If supported:</strong> {escape(c.action)}</p>"
-            if c.cause else (f"<p><strong>What to look for:</strong> {escape(c.supports_if)}</p>" if c.supports_if else "")
+            + f"</p><p><strong>If supported, consider:</strong> {escape(c.action)}</p>"
+            if c.cause else ""
         )
         + "</article>"
         for c in summary.checks
     )
     stage_checks = "".join(
-        f'<p class="note"><strong>Also for {escape(label)}, after tracking:</strong> '
+        f'<p class="note"><strong>Also check the {escape(label)} step, after tracking:</strong> '
         f"{escape(' · '.join(c.title for c in checks_))}.</p>"
         for label, checks_ in summary.stage_checks
     )
     return (
-        '<section class="executive"><h2>Executive diagnosis</h2>'
+        '<section class="executive"><h2>Business summary</h2>'
         f"{source}"
         "<h3>What changed?</h3>"
-        f'<p class="headline">{escape(summary.headline)}</p>{tiles}{mechanisms}{cancel}'
+        f'<p class="headline">{escape(summary.headline)}</p>{tiles}{effects}{cancel}'
         "<h3>What needs attention?</h3>"
-        + (f"<ul>{problems}</ul>" if problems else "<p>No final KPI worsened by the threshold or more.</p>")
+        + (f"<ul>{problems}</ul>" if problems else "<p>No key figure worsened by enough to count as a problem.</p>")
         + (f'<ul class="note">{notes}</ul>' if notes else "")
-        + "<h3>What should I investigate next?</h3>"
-        + ((checks + stage_checks) if checks else "<p>Nothing needs investigating for this comparison.</p>")
-        + '<p class="note">Section 3 has every check\'s full interpretation, and section 4 every conditional action.</p>'
+        + "<h3>What should I check next?</h3>"
+        + ((checks + stage_checks) if checks else "<p>Nothing needs checking for this comparison.</p>")
+        + '<p class="note">Section 3 has every check\'s full interpretation, section 4 every conditional action, '
+        "and section 8 explains every key figure.</p>"
         "</section>"
-        '<h2 class="part">Detailed analysis</h2>'
+        '<h2 class="part">Technical details</h2>'
     )
 
 
@@ -401,7 +404,7 @@ def _quality_section(item, number):
     messages = [*item.load_warnings, *item.diagnosis.warnings]
     groups = "".join(
         f"<h3>{escape(group)}</h3><ul>{_items(rows)}</ul>"
-        for group, rows in view.group_warnings(messages).items()
+        for group, rows in view.plain_warning_groups(messages).items()
     )
     return (
         f"<section><h2>{number}. Data quality</h2>"
@@ -419,6 +422,22 @@ def _method_section(number):
         f"<h3>Methodology</h3><ul>{_items(METHODOLOGY)}</ul>"
         f"<h3>Metric definitions</h3>{_table(('Metric', 'Definition'), rows)}"
         f"<h3>Limitations</h3><ul>{_items(LIMITATIONS)}</ul></section>"
+    )
+
+
+def _glossary_section(item, number):
+    """Every key figure in plain words, with its formula and this comparison's own figures."""
+    summary_help = executive.kpi_help(item.diagnosis, item.currency)
+    rows = [
+        f'<tr><th scope="row">{escape(name)}</th><td>{escape(definition)}</td><td>{escape(formula)}</td>'
+        f"<td>{escape(example)}</td></tr>"
+        for _, (name, definition, formula, example) in summary_help
+    ]
+    return (
+        f"<section><h2>{number}. KPI glossary</h2>"
+        f'<p class="note">{escape(view.GLOSSARY_NOTE)}</p>'
+        f"{_table(('Key figure', 'What it means', 'Formula', 'In this comparison'), rows)}"
+        f"<h3>How the KPIs fit together</h3><ul>{_items(view.KPI_RELATIONSHIPS)}</ul></section>"
     )
 
 
@@ -440,7 +459,7 @@ def build_report(item):
         f"{_ai_alert(item.marketing)}{_executive_section(item)}"
         f"{_findings_section(item)}{_causes_section(item)}{_investigations_section(item)}"
         f"{_actions_section(item)}{_ai_sections(item)}"
-        f"{_quality_section(item, first_free)}{_method_section(first_free + 1)}"
+        f"{_quality_section(item, first_free)}{_method_section(first_free + 1)}{_glossary_section(item, first_free + 2)}"
         f'<footer>Funnel Magnet version {__version__}. ESCP MBA prototype. '
         "Python calculated the figures in this report.</footer>"
         "</main></body></html>\n"

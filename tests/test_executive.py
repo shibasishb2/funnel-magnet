@@ -42,8 +42,10 @@ def test_every_scenario_answers_the_three_questions(name, granularity):
     summary = executive.build(diagnosis, marketing, warnings, currency=currency)
 
     # What changed: the headline, ROAS and at most three other KPIs, and the path to ROAS.
-    assert summary.headline.startswith("ROAS")
-    assert summary.tiles[0].label == "ROAS" and len(summary.tiles) <= 1 + executive.EXTRA_TILES
+    assert summary.headline.startswith("Return on ad spend")
+    assert summary.tiles[0].label == "ROAS"
+    # Every KPI in the comparison has help for its info icon.
+    assert {m for m, _ in summary.help} >= {"roas", "aov", "cpa", "cpc", "cvr", "cpm", "ctr"} and len(summary.tiles) <= 1 + executive.EXTRA_TILES
     for chain in summary.mechanisms:
         assert " → " in chain and chain.endswith("points")
     # What needs attention: no materially worse final KPI is simplified away.
@@ -70,7 +72,14 @@ def test_falling_roas_names_the_biggest_drag():
     diagnosis, marketing, currency, _ = scenario("CPM inflation")
     summary = executive.build(diagnosis, marketing, currency=currency)
 
-    assert summary.headline == "ROAS fell 14.3%. The biggest drag was cost per 1,000 impressions (CPM up 18.3%)."
+    assert summary.headline == (
+        "Return on ad spend fell 14.3%: each €1 of ad spend now brings back €3.54 in recorded sales, compared with "
+        "€4.13 before. The biggest drag was cost per 1,000 impressions (CPM up 18.3%)."
+    )
+    assert summary.problems[0].effect == (
+        "Rose 18.3%, which made each click and each sale more expensive. "
+        "It cut the sales brought back by each €1 of ad spend by €0.64."
+    )
     assert [t.label for t in summary.tiles] == ["ROAS", "CPM", "CPC", "CPA"]
     assert summary.mechanisms == ("CPM +18.3% → CPC +17.1% → CPA +16.8% → ROAS -0.64 points",)
     assert not summary.problems[0].hidden and summary.cancel == ""
@@ -80,7 +89,10 @@ def test_stable_roas_with_an_offsetting_problem_is_flagged_as_hidden():
     diagnosis, marketing, currency, _ = scenario("Masked problem")
     summary = executive.build(diagnosis, marketing, currency=currency)
 
-    assert summary.headline.startswith("ROAS held steady (+2.9%), but cost per 1,000 impressions (CPM up 18.3%) worsened.")
+    assert summary.headline.startswith("Return on ad spend held steady (+2.9%)")
+    assert "But cost per 1,000 impressions (CPM up 18.3%) worsened." in summary.headline
+    assert summary.effects == ("Average order value rose 20.1%, so each order was worth more. "
+                               "It added €0.92 to the sales brought back by each €1 of ad spend.",)
     assert "Gains in average order value are hiding it." in summary.headline
     assert [p.hidden for p in summary.problems] == [True]
     # The gain that hides the problem is shown with it.
@@ -92,7 +104,10 @@ def test_rising_roas_with_hidden_problems_names_both():
     diagnosis, marketing, currency, _ = scenario("Sep-Oct")
     summary = executive.build(diagnosis, marketing, currency=currency)
 
-    assert summary.headline.startswith("ROAS rose 14.7%, but cost per 1,000 impressions (CPM up 44.4%) and ")
+    assert summary.headline.startswith("Return on ad spend rose 14.7%")
+    assert "But cost per 1,000 impressions (CPM up 44.4%) and " in summary.headline
+    # CPA fell, so the CPM problem is not said to have made sales more expensive.
+    assert "although other improvements kept the cost of each sale from rising" in summary.problems[0].effect
     assert "purchases per checkout started (down 11.2%)" in summary.headline
     assert all(p.hidden for p in summary.problems) and len(summary.problems) == 2
     # The real diagnostic path, including the steps that moved the other way.
@@ -108,7 +123,10 @@ def test_healthy_control_says_nothing_worsened():
     diagnosis, marketing, currency, _ = scenario("Healthy control")
     summary = executive.build(diagnosis, marketing, currency=currency)
 
-    assert summary.headline == "ROAS held steady (+1.4%), and no KPI worsened by 5% or more."
+    assert summary.headline == (
+        "Return on ad spend held steady (+1.4%): each €1 of ad spend now brings back €4.91 in recorded sales, "
+        "compared with €4.84 before. No other key figure worsened by 5% or more."
+    )
     assert summary.problems == () and summary.checks == () and [t.label for t in summary.tiles] == ["ROAS"]
 
 
@@ -152,12 +170,13 @@ def test_each_card_says_what_to_check_what_would_support_it_and_what_to_do():
 
     assert card.look_at == item.look_at and card.cause == "Account structure"
     # No campaign-comparison reading is about account structure, so the card says so neutrally.
-    assert card.supports_if == "If this check's results point to account structure, that would support this possible cause."
+    assert card.supports_if == "Results that point to account structure."
     assert card.action.startswith("Consolidate fragmented ad sets")
     assert set(card.other_readings) == set(item.readings)
     # The other readings and the uncertainty note are folded away on the page.
     html = render.executive_html(executive.build(diagnosis, marketing))
-    folded = html[html.index("<details"):html.index("</details>")]
+    start = html.index('<details class="fm-more"')
+    folded = html[start:html.index("</details>", start)]
     assert escape(card.if_unclear) in folded and all(escape(r) in folded for r in card.other_readings)
 
 
@@ -171,7 +190,7 @@ def test_data_notes_are_short_and_complete():
     diagnosis, marketing, _, warnings = scenario("CPM inflation")
     notes = executive.build(diagnosis, marketing, warnings).data_notes
 
-    assert [note.split(":")[0] for note in notes] == list(view.group_warnings([*warnings, *diagnosis.warnings]))
+    assert [note.split(":")[0] for note in notes] == list(view.plain_warning_groups([*warnings, *diagnosis.warnings]))
 
 
 def test_every_kpi_has_a_plain_name_and_why_it_matters():
@@ -208,11 +227,11 @@ def test_page_and_report_show_the_same_executive_diagnosis(name):
         diagnosis, build_evidence(diagnosis, currency), "File", "All campaigns", "a", "b", "c",
         date(2026, 11, 3), currency, warnings, marketing=marketing,
     ))
-    executive_part = html[html.index('<section class="executive">'):html.index('<h2 class="part">Detailed analysis</h2>')]
+    executive_part = html[html.index('<section class="executive">'):html.index('<h2 class="part">Technical details</h2>')]
 
     assert html.index('<section class="executive">') < html.index("1. A. Confirmed findings")
-    pieces = [summary.headline, *summary.mechanisms, *summary.data_notes, summary.cancel]
-    pieces += [p.why for p in summary.problems]
+    pieces = [summary.headline, *summary.effects, *summary.data_notes, summary.cancel]
+    pieces += [part for p in summary.problems for part in (p.name, p.effect, p.why)]
     pieces += [part for c in summary.checks for part in (c.title, c.look_at, c.supports_if, c.cause, c.action)]
     pieces += [c.title for _, checks in summary.stage_checks for c in checks]
     for piece in filter(None, pieces):
@@ -235,7 +254,8 @@ def test_the_summary_stays_short(name):
     visible = re.sub(r"<details.*?</details>", " ", html, flags=re.S)
     words = len(unescape(re.sub(r"<[^>]+>", " ", visible)).split())
 
-    assert words <= 400, words
+    # Plain-English explanations add some words. The default view stays short enough to scan.
+    assert words <= 500, words
 
 
 def test_card_wording_reads_as_plain_english():
@@ -275,9 +295,10 @@ def test_funnel_stages_are_described_as_event_ratios_not_people():
 
 
 def test_offsetting_movements_are_explained_in_plain_english():
-    for name, net in (("Masked problem", "+0.14"), ("Sep-Oct", "+0.46")):
-        summary = executive.build(*scenario(name)[:2])
-        assert "largely cancel out" in summary.cancel and summary.cancel.endswith(f"net change of only {net}.")
+    for name, net in (("Masked problem", "+€0.14"), ("Sep-Oct", "+€0.46")):
+        diagnosis, marketing, currency, _ = scenario(name)
+        summary = executive.build(diagnosis, marketing, currency=currency)
+        assert "largely cancelled out" in summary.cancel and summary.cancel.endswith(f"net change was only {net}.")
     assert executive.build(*scenario("CPM inflation")[:2]).cancel == ""
     # What "% of all movement" means is explained where the shares are shown.
     diagnosis, marketing, currency, warnings = scenario("Masked problem")
@@ -465,4 +486,77 @@ def test_a_reading_naming_a_different_cause_is_not_used():
     card = next(c for c in executive.build(diagnosis, marketing).checks if c.title == "Results by placement")
 
     assert card.cause == "Traffic quality"
-    assert card.supports_if == "If this check's results point to traffic quality, that would support this possible cause."
+    assert card.supports_if == "Results that point to traffic quality."
+
+
+
+# Phase 1: KPI glossary and plain-English warnings.
+
+def test_glossary_formulas_match_the_metric_definitions():
+    from funnel_magnet.metrics import Totals, compute_metrics
+
+    totals = Totals(1000.0, 200_000.0, 3000.0, 60.0, 4200.0)
+    values = compute_metrics(totals)
+    assert values["roas"] == totals.purchase_value / totals.spend
+    assert values["aov"] == totals.purchase_value / totals.purchases
+    assert values["cpa"] == totals.spend / totals.purchases
+    assert values["cpc"] == totals.spend / totals.link_clicks
+    assert values["cvr"] == totals.purchases / totals.link_clicks
+    assert values["cpm"] == totals.spend / totals.impressions * 1000
+    assert values["ctr"] == totals.link_clicks / totals.impressions
+    formulas = {m: f for m, (_, _, f) in view.GLOSSARY.items()}
+    assert formulas["cvr"] == "Purchases ÷ link clicks" and formulas["cpm"] == "Ad spend ÷ impressions × 1,000"
+    # The relationships the glossary states hold exactly.
+    assert abs(values["roas"] - values["aov"] / values["cpa"]) < 1e-12
+    assert abs(values["cpa"] - values["cpc"] / values["cvr"]) < 1e-12
+    assert abs(values["cpc"] - values["cpm"] / (1000 * values["ctr"])) < 1e-12
+
+
+@pytest.mark.parametrize("name", ALL)
+def test_kpi_examples_use_this_comparisons_own_figures(name):
+    diagnosis, marketing, currency, _ = scenario(name)
+    help = dict(executive.build(diagnosis, marketing, currency=currency).help)
+
+    for metric, (full, definition, formula, example) in help.items():
+        change = diagnosis.changes[metric]
+        if change.current is None:
+            continue
+        assert full and definition and formula and example
+        if metric in view.CURRENCY_METRICS:
+            assert view.format_value(metric, change.current, currency) in example
+
+
+def test_info_icons_are_compact_and_cover_the_tiles_and_problems():
+    diagnosis, marketing, currency, _ = scenario("CPM inflation")
+    html = render.executive_html(executive.build(diagnosis, marketing, currency=currency))
+
+    assert html.count('<details class="fm-info">') == 4 + 1  # four tiles and one problem
+    assert "Ad spend ÷ impressions × 1,000" in html and "Showing the ads 1,000 times cost €13.95" in html
+
+
+def test_plain_warnings_keep_their_substance():
+    for original, words in (
+        ("The file has no attribution setting, so comparability could not be checked.", ("attribution setting", "can't be confirmed")),
+        ("At least one period has fewer than 30 purchases, so treat results as directional.", ("fewer than 30 purchases", "rough indication")),
+        ("The prior period has zero purchases, so AOV and CPA are undefined. Contributions that depend on them are not calculated.",
+         ("prior period", "no purchases", "can't be calculated")),
+        ("The current period has data for 5 of 7 days. Missing days are counted as no delivery.", ("5 of its 7 days", "no advertising")),
+        ("Attribution settings differ, so purchases may not be like-for-like across periods.", ("different attribution settings", "not be directly comparable")),
+    ):
+        plain = view.plain_warning(original)
+        assert all(word in plain for word in words), plain
+    assert view.plain_warning("Something new and unexpected.") == "Something new and unexpected."
+
+
+def test_the_report_has_the_glossary_and_consistent_names():
+    diagnosis, marketing, currency, warnings = scenario("Checkout friction")
+    html = report.build_report(report.ReportInput(
+        diagnosis, build_evidence(diagnosis, currency), "File", "All campaigns", "a", "b", "c",
+        date(2026, 11, 11), currency, warnings, marketing=marketing,
+    ))
+
+    assert "<h2>Business summary</h2>" in html and '<h2 class="part">Technical details</h2>' in html
+    assert "8. KPI glossary" in html
+    for metric, (name, _, formula) in view.GLOSSARY.items():
+        if metric in diagnosis.changes and diagnosis.changes[metric].current is not None:
+            assert escape(name) in html and escape(formula) in html

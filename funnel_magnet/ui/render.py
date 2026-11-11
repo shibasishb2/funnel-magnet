@@ -44,10 +44,33 @@ def _pill(change, status):
     )
 
 
-def kpis_html(cards, prior_label, current_label):
+def info_icon(entry):
+    """A small clickable "i" that opens the KPI's name, meaning, formula and example."""
+    if not entry:
+        return ""
+    name, definition, formula, example = entry
+    return (
+        f'<details class="fm-info"><summary title="What is {escape(name)}?" aria-label="What is {escape(name)}?">i</summary>'
+        f'<div class="fm-info-body"><strong>{escape(name)}</strong><p>{escape(definition)}</p>'
+        f"<p><strong>Formula:</strong> {escape(formula)}</p>"
+        + (f"<p><strong>Here:</strong> {escape(example)}</p>" if example else "")
+        + "</div></details>"
+    )
+
+
+def kpis_html(cards, prior_label, current_label, help=None, plain=False):
+    """KPI tiles. With help, each label gets an info icon; plain shows the full name first."""
+    help = dict(help or ())
+
+    def label(card):
+        entry = help.get(card.metric)
+        if plain and entry:
+            return f'{escape(entry[0].split(" (")[0])} <span class="fm-abbr">{escape(card.label)}</span>{info_icon(entry)}'
+        return f"{escape(card.label)}{info_icon(entry)}"
+
     tiles = "".join(
         '<div class="fm-kpi">'
-        f'<div class="fm-kpi-label">{escape(card.label)}</div>'
+        f'<div class="fm-kpi-label">{label(card)}</div>'
         f'<div class="fm-kpi-value">{escape(card.current)}</div>'
         f'<div class="fm-kpi-prior">{escape(prior_label)}: {escape(card.prior)}</div>'
         f"{_pill(card.change, card.status)}"
@@ -189,7 +212,7 @@ def possible_causes_html(marketing):
 
 
 def _where(item):
-    return "In your upload" if item.available else "Collect outside this app"
+    return "Uses data already in this app" if item.available else "Needs data from outside this app"
 
 
 def interpretation_html(item):
@@ -261,69 +284,92 @@ def actions_html(marketing):
 
 
 def _exec_card(check):
-    """One investigation: what to check, the result that would support a cause, and the action."""
-    cause = ""
+    """One check in plain words: what to check, the evidence to look for, and what to do."""
+    lines = f"<p><strong>What to check:</strong> {escape(check.look_at)}</p>"
+    if check.supports_if:
+        lines += f"<p><strong>Evidence to look for:</strong> {escape(check.supports_if)}</p>"
     if check.cause:
         related = f" (related: {escape(', '.join(check.related))})" if check.related else ""
-        cause = (
-            f"<p><strong>Would support {escape(check.cause)}{related}:</strong> {escape(check.supports_if)}</p>"
-            f"<p><strong>If supported:</strong> {escape(check.action)}</p>"
+        lines += (
+            f"<p><strong>Possible cause:</strong> {escape(check.cause)}{related}</p>"
+            f"<p><strong>If supported, consider:</strong> {escape(check.action)}</p>"
         )
-    elif check.supports_if:
-        cause = f"<p><strong>What to look for:</strong> {escape(check.supports_if)}</p>"
     more = "".join(f"<li>{escape(reading)}</li>" for reading in check.other_readings)
     folded = _more(
-        "Other results and uncertainty",
+        "Other possible results",
         (f"<ul>{more}</ul>" if more else "") + f"<p><strong>If the result is unclear:</strong> {escape(check.if_unclear)}</p>",
     ) if (more or check.if_unclear) else ""
     return (
         '<article class="fm-ai-card fm-exec-check">'
-        f'<div class="fm-ai-card-tag">Priority {check.rank} · {escape(check.where)}</div>'
-        f"<p><strong>{escape(check.title)}.</strong> {escape(check.look_at)}</p>{cause}{folded}</article>"
+        f'<div class="fm-ai-card-tag">Check {check.rank} · {escape(check.where)}</div>'
+        f"<p><strong>{escape(check.title)}</strong></p>{lines}{folded}</article>"
     )
 
 
 def executive_html(summary, prior_label="", current_label=""):
-    """Level 1: what changed, what needs attention, and what to investigate next."""
+    """The business summary: what changed, what needs attention, and what to check next."""
+    help = dict(summary.help)
     source_class = "fm-source fm-source-synthetic" if summary.synthetic else "fm-source"
     source = f'<p class="{source_class}">{escape(summary.source)}</p>' if summary.source else ""
     tiles = ""
     if summary.tiles:
-        tiles = kpis_html(summary.tiles, prior_label, current_label).replace('class="fm-kpis"', 'class="fm-kpis fm-kpis-compact"')
-        tiles = tiles[tiles.index('<div class="fm-kpis'):]
-    mechanisms = "".join(f'<p class="fm-mechanism">{escape(chain)}</p>' for chain in summary.mechanisms)
+        tiles = kpis_html(summary.tiles, prior_label, current_label, summary.help, plain=True)
+        tiles = tiles[tiles.index('<div class="fm-kpis'):].replace('class="fm-kpis"', 'class="fm-kpis fm-kpis-compact"', 1)
+    effects = "".join(f"<p>{escape(effect)}</p>" for effect in summary.effects)
     cancel = f"<p>{escape(summary.cancel)}</p>" if summary.cancel else ""
 
-    shown = {tile.label for tile in summary.tiles}
     if summary.problems:
         problems = "<ul>" + "".join(
-            # A KPI already on a tile needs only its name here, not its figures again.
-            f"<li><strong>{escape(p.label if p.label in shown else p.change)}</strong>"
-            + (' <span class="fm-hidden">Hidden by overall ROAS</span>' if p.hidden else "")
+            f"<li><strong>{escape(p.name or p.label)}</strong>{info_icon(help.get(p.metric))}"
+            + (' <span class="fm-hidden">Hidden by the overall result</span>' if p.hidden else "")
+            + (f"<div>{escape(p.effect)}</div>" if p.effect else "")
             + (f'<div class="fm-panel-note">{escape(p.why)}</div>' if p.why else "")
             + "</li>"
             for p in summary.problems
         ) + "</ul>"
     else:
-        problems = "<p>No final KPI worsened by the threshold or more.</p>"
+        problems = "<p>No key figure worsened by enough to count as a problem.</p>"
     notes = "".join(f"<li>{escape(note)}</li>" for note in summary.data_notes)
 
     checks = "".join(_exec_card(check) for check in summary.checks)
     stage_checks = "".join(
-        f'<p class="fm-panel-note"><strong>Also for {escape(label)}, after tracking:</strong> '
+        f'<p class="fm-panel-note"><strong>Also check the {escape(label)} step, after tracking:</strong> '
         f"{escape(' · '.join(c.title for c in checks_))}.</p>"
         for label, checks_ in summary.stage_checks
     )
-    investigate = (checks + stage_checks) if checks else "<p>Nothing needs investigating for this comparison.</p>"
+    investigate = (checks + stage_checks) if checks else "<p>Nothing needs checking for this comparison.</p>"
     return (
         '<section class="fm-panel fm-executive fm-section">'
         f"{source}"
         '<div class="fm-question">What changed?</div>'
-        f'<p class="fm-headline">{escape(summary.headline)}</p>{tiles}{mechanisms}{cancel}'
+        f'<p class="fm-headline">{escape(summary.headline)}</p>{tiles}{effects}{cancel}'
         '<div class="fm-question">What needs attention?</div>'
         f"{problems}"
         + (f'<ul class="fm-panel-note">{notes}</ul>' if notes else "")
-        + '<div class="fm-question">What should I investigate next?</div>'
+        + '<div class="fm-question">What should I check next?</div>'
         f"{investigate}"
         "</section>"
+    )
+
+
+def glossary_html(help, mechanisms=()):
+    """Every KPI and funnel step in one place, with how they fit together."""
+    from funnel_magnet.ui.view import GLOSSARY_NOTE, KPI_RELATIONSHIPS
+
+    rows = "".join(
+        f'<div class="fm-glossary-item"><strong>{escape(name)}</strong><p>{escape(definition)}</p>'
+        f'<p class="fm-panel-note">Formula: {escape(formula)}</p>'
+        + (f'<p class="fm-panel-note">Here: {escape(example)}</p>' if example else "")
+        + "</div>"
+        for _, (name, definition, formula, example) in help
+    )
+    links = "".join(f"<li>{escape(line)}</li>" for line in KPI_RELATIONSHIPS)
+    paths = "".join(f"<li>{escape(chain)}</li>" for chain in mechanisms)
+    return (
+        '<section class="fm-panel fm-section">'
+        '<div class="fm-panel-tag">KPI glossary</div>'
+        f'<p class="fm-panel-note">{escape(GLOSSARY_NOTE)}</p>{rows}'
+        f'<div class="fm-ai-heading">How the KPIs fit together</div><ul>{links}</ul>'
+        + (f'<div class="fm-ai-heading">The diagnostic path in this comparison</div><ul>{paths}</ul>' if paths else "")
+        + "</section>"
     )

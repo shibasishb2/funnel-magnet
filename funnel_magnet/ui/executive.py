@@ -26,7 +26,7 @@ SHARE_NOTE = (
     "“% of all movement” is each KPI’s part of all ROAS movement in both directions added "
     "together, not a share of the net ROAS change."
 )
-WHERE = {True: "In your upload", False: "Collect outside this app"}
+WHERE = {True: "Uses data already in this app", False: "Needs data from outside this app"}
 
 
 @dataclass(frozen=True)
@@ -36,6 +36,9 @@ class ProblemKpi:
     effect: str
     hidden: bool
     why: str
+    metric: str = ""
+    # The full name, such as "Cost per 1,000 impressions (CPM)".
+    name: str = ""
 
 
 @dataclass(frozen=True)
@@ -82,6 +85,7 @@ class StageCheck:
 class ExecutiveSummary:
     headline: str
     tiles: tuple[view.Kpi, ...]
+    # The diagnostic path in figures, for the technical details.
     mechanisms: tuple[str, ...]
     cancel: str
     problems: tuple[ProblemKpi, ...]
@@ -91,6 +95,10 @@ class ExecutiveSummary:
     stage_checks: tuple[tuple[str, tuple[StageCheck, ...]], ...] = ()
     source: str = ""
     synthetic: bool = False
+    # What each important movement meant for the business, in plain English.
+    effects: tuple[str, ...] = ()
+    # KPI help for the info icons: metric -> (name, definition, formula, example).
+    help: tuple[tuple[str, tuple[str, str, str, str]], ...] = ()
 
 
 def _join(items, word="and"):
@@ -122,23 +130,41 @@ def _roas_text(roas):
     return f"ROAS {'rose' if roas.pct_change > 0 else 'fell'} {abs(roas.pct_change):.1%}"
 
 
-def _headline(diagnosis, marketing):
+def _roas_business(roas, currency):
+    """Like "Return on ad spend fell 14.3%: each €1 of ad spend now brings back €3.54 in
+    recorded sales, compared with €4.13 before." """
+    if roas.pct_change is None:
+        return "Return on ad spend couldn't be compared."
+    if roas.status is Status.STABLE:
+        moved = f"held steady ({roas.pct_change:+.1%})"
+    else:
+        moved = f"{'rose' if roas.pct_change > 0 else 'fell'} {abs(roas.pct_change):.1%}"
+    symbol = view.CURRENCY_SYMBOLS.get(currency, "")
+    unit = f"{symbol}1" if symbol else "unit"
+    return (
+        f"Return on ad spend {moved}: each {unit} of ad spend now brings back {symbol}{roas.current:,.2f} in recorded "
+        f"sales, compared with {symbol}{roas.prior:,.2f} before."
+    )
+
+
+def _headline(diagnosis, marketing, currency=None):
     if not diagnosis.assessable:
-        return "ROAS can't be compared for these periods, because at least one has no spend."
+        return "Return on ad spend can't be compared for these periods, because at least one has no ad spend."
     changes, threshold = diagnosis.changes, view.format_threshold(diagnosis.threshold)
     roas = changes["roas"]
+    opening = _roas_business(roas, currency)
     problems = [changes[move.metric] for move in marketing.problems]
     if not problems:
         if roas.status is Status.DETERIORATED:
-            return f"{_roas_text(roas)}, but no single KPI worsened by {threshold} or more. The drop comes from several smaller changes."
-        return f"{_roas_text(roas)}, and no KPI worsened by {threshold} or more."
+            return f"{opening} No single key figure worsened by {threshold} or more: the drop comes from several smaller changes."
+        return f"{opening} No other key figure worsened by {threshold} or more."
     if roas.status is Status.DETERIORATED:
-        headline = f"{_roas_text(roas)}. The biggest drag was {_named(problems[0])}"
+        headline = f"{opening} The biggest drag was {_named(problems[0])}"
         if len(problems) > 1:
             headline += f", and {_join(_named(c) for c in problems[1:])} also worsened"
         return headline + "."
     # ROAS held or rose, so something improving is hiding the problems.
-    headline = f"{_roas_text(roas)}, but {_join(_named(c) for c in problems)} worsened"
+    headline = f"{opening} But {_join(_named(c) for c in problems)} worsened"
     gains = [changes[move.metric] for move in marketing.beneficial]
     if gains:
         hidden = "it" if len(problems) == 1 else "them"
@@ -192,29 +218,97 @@ def _mechanisms(diagnosis, marketing):
     return tuple(chains)
 
 
-def _cancelling(diagnosis):
+def _business_effect(diagnosis, move, drivers, currency=None, named=True):
+    """One plain sentence on what a final KPI's movement did to the business, such as
+    "Cost per 1,000 impressions rose 18.3%, which made each click and each sale more
+    expensive. It took 0.64 off return on ad spend." Every clause follows a measured status."""
+    changes = diagnosis.changes
+    change = changes[move.metric]
+    plain = view.PLAIN_NAMES.get(move.metric, move.label)
+    moved = f"{'rose' if (change.pct_change or 0) > 0 else 'fell'} {abs(change.pct_change or 0):.1%}"
+    sentence = f"{plain[0].upper()}{plain[1:]} {moved}" if named else f"{moved[0].upper()}{moved[1:]}"
+    path = _path_to(diagnosis, move.metric)
+    worse = lambda metric: metric in changes and changes[metric].status is Status.DETERIORATED
+    better = lambda metric: metric in changes and changes[metric].status is Status.IMPROVED
+    driver = drivers.get(move.metric)
+    if move.metric == "aov":
+        sentence += ", so each order was worth less" if worse("aov") else ", so each order was worth more"
+    elif change.status is Status.DETERIORATED and "cpa" in path:
+        if worse("cpa"):
+            sentence += ", which made each click and each sale more expensive" if "cpc" in path and worse("cpc") else ", which made each sale more expensive"
+        else:
+            sentence += ", although other improvements kept the cost of each sale from rising"
+    elif change.status is Status.IMPROVED and "cpa" in path:
+        sentence += ", which helped make each sale cheaper" if better("cpa") else ""
+    sentence += "."
+    if driver is not None and driver.contribution:
+        sentence += " " + _roas_points(driver.contribution, currency)
+    return sentence
+
+
+def _unit(currency):
+    symbol = view.CURRENCY_SYMBOLS.get(currency, "")
+    return f"{symbol}1" if symbol else "unit"
+
+
+def _money(amount, currency):
+    symbol = view.CURRENCY_SYMBOLS.get(currency, "")
+    return f"{symbol}{amount:,.2f}"
+
+
+def _roas_points(points, currency):
+    """ROAS points in money terms, such as "It cut the sales brought back by each €1 of ad
+    spend by €0.64." ROAS is sales per unit of spend, so a point is that much in sales."""
+    symbol = view.CURRENCY_SYMBOLS.get(currency, "")
+    unit = f"each {symbol}1" if symbol else "each unit"
+    if points < 0:
+        return f"It cut the sales brought back by {unit} of ad spend by {_money(-points, currency)}."
+    return f"It added {_money(points, currency)} to the sales brought back by {unit} of ad spend."
+
+
+def _effects(diagnosis, marketing, currency=None):
+    if not diagnosis.assessable:
+        return ()
+    drivers = {driver.metric: driver for driver in diagnosis.drivers}
+    # When ROAS held or rose, the gain hiding the problems belongs in "What changed".
+    # Each problem's own effect is shown with it under "What needs attention".
+    if not marketing.problems or diagnosis.changes["roas"].status is Status.DETERIORATED:
+        return ()
+    return tuple(_business_effect(diagnosis, move, drivers, currency) for move in marketing.beneficial[:1])
+
+
+def kpi_help(diagnosis, currency=None):
+    """Glossary help for every KPI and funnel step in this comparison, with its own figures."""
+    items = []
+    for metric, (name, definition, formula) in view.GLOSSARY.items():
+        if metric in diagnosis.changes:
+            items.append((metric, (view.full_name(metric), definition, formula, view.kpi_example(diagnosis.changes[metric], currency))))
+    return tuple(items)
+
+
+def _cancelling(diagnosis, currency=None):
     """Say plainly when gains and losses largely cancel out, so a small net change isn't misread."""
     gains = sum(d.contribution for d in diagnosis.drivers if d.contribution > 0)
     losses = -sum(d.contribution for d in diagnosis.drivers if d.contribution < 0)
     if not gains or not losses or min(gains, losses) < CANCEL_RATIO * max(gains, losses):
         return ""
     return (
-        f"Gains of {gains:.2f} and losses of {losses:.2f} ROAS points largely cancel out, "
-        f"leaving a net change of only {gains - losses:+.2f}."
+        f"Gains and losses largely cancelled out: for each {_unit(currency)} of ad spend, improvements added "
+        f"{_money(gains, currency)} in sales and problems took away {_money(losses, currency)}, so the net change "
+        f"was only {'+' if gains >= losses else '-'}{_money(abs(gains - losses), currency)}."
     )
 
 
-def _problems(diagnosis, marketing):
+def _problems(diagnosis, marketing, currency=None):
     drivers = {driver.metric: driver for driver in diagnosis.drivers}
     hidden = diagnosis.assessable and diagnosis.changes["roas"].status is not Status.DETERIORATED
     items = []
     for move in marketing.problems:
-        driver = drivers.get(move.metric)
-        effect = (
-            f"Took {abs(driver.contribution):.2f} off ROAS."
-            if driver is not None and driver.contribution < 0 else ""
-        )
-        items.append(ProblemKpi(move.label, move.change, effect, hidden, view.WHY_IT_MATTERS.get(move.metric, "")))
+        # What it did, measured: "Rose 18.3%, which made each sale more expensive. It cut..."
+        effect = _business_effect(diagnosis, move, drivers, currency, named=False) if diagnosis.assessable else ""
+        items.append(ProblemKpi(
+            move.label, move.change, effect, hidden, view.WHY_IT_MATTERS.get(move.metric, ""), move.metric, view.full_name(move.metric)
+        ))
     return tuple(items)
 
 
@@ -314,7 +408,7 @@ def _best_reading(readings, step):
 def _neutral(cause):
     """A conditional line for a card with no reading about its cause."""
     name = cause if cause[1:2].isupper() else cause[0].lower() + cause[1:]
-    return f"If this check's results point to {name}, that would support this possible cause."
+    return f"Results that point to {name}."
 
 
 def _checks(marketing, steps):
@@ -354,12 +448,11 @@ def _stage_checks(marketing):
 
 
 def _data_notes(messages):
-    """One short line per kind of warning. The full messages are under Data quality."""
+    """One short plain line per kind of warning. The full messages are under Data quality."""
     notes = []
-    for group, items in view.group_warnings(messages).items():
-        first = re.split(r"(?<=\.)\s", items[0], maxsplit=1)[0]
-        more = f" (+{len(items) - 1} more)" if len(items) > 1 else ""
-        notes.append(f"{group}: {first}{more}")
+    for group, items in view.plain_warning_groups(messages).items():
+        more = f" (+{len(items) - 1} more under Data quality)" if len(items) > 1 else ""
+        notes.append(f"{group}: {items[0]}{more}")
     return tuple(notes)
 
 
@@ -396,11 +489,13 @@ def build(diagnosis, marketing, warnings=(), source_name="", synthetic=False, cu
     """Return the executive diagnosis for the same diagnosis the detailed analysis shows."""
     steps = _next_steps(marketing)
     return ExecutiveSummary(
-        headline=_headline(diagnosis, marketing),
+        headline=_headline(diagnosis, marketing, currency),
         tiles=_tiles(diagnosis, marketing, currency) if diagnosis.assessable else (),
         mechanisms=_mechanisms(diagnosis, marketing),
-        cancel=_cancelling(diagnosis),
-        problems=_problems(diagnosis, marketing),
+        cancel=_cancelling(diagnosis, currency),
+        effects=_effects(diagnosis, marketing, currency),
+        help=kpi_help(diagnosis, currency),
+        problems=_problems(diagnosis, marketing, currency),
         data_notes=_data_notes([*warnings, *diagnosis.warnings]),
         checks=_checks(marketing, steps),
         next_steps=steps,

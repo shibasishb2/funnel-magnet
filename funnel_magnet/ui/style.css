@@ -212,3 +212,17 @@
 .fm-executive .fm-question:first-of-type { margin-top: 4px; }
 .fm-kpis.fm-kpis-compact { grid-template-columns: repeat(auto-fit, minmax(150px, 220px)); margin: 6px 0 8px; }
 .fm-mechanism { color: var(--fm-muted); font-size: 0.88rem; margin: 2px 0; }
+/* KPI help: a small clickable i that opens a compact box */
+.fm-info { display: inline-block; position: relative; margin-left: 4px; vertical-align: middle; }
+.fm-info > summary { list-style: none; cursor: pointer; width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--fm-muted); color: var(--fm-muted); font: italic 700 11px/14px Georgia, serif; text-align: center; }
+.fm-info > summary::-webkit-details-marker { display: none; }
+.fm-info[open] > summary { background: var(--fm-ink); border-color: var(--fm-ink); color: #fff; }
+.fm-info-body { position: absolute; z-index: 20; left: 0; top: 22px; width: min(280px, 78vw); padding: 10px 12px; background: var(--fm-surface); border: 1px solid var(--fm-line); border-radius: 8px; box-shadow: 0 4px 14px rgba(0,0,0,.12); color: var(--fm-text); font-size: 0.84rem; font-weight: 400; text-transform: none; letter-spacing: normal; }
+.fm-info-body p { margin: 4px 0; }
+.fm-abbr { color: var(--fm-muted); font-weight: 400; }
+.fm-glossary-item { border-top: 1px solid var(--fm-line); padding: 8px 0; }
+.fm-glossary-item p { margin: 2px 0; }
+/* On phones the KPI help opens as a sheet along the bottom of the screen, so it never runs off the side */
+@media (max-width: 640px) {
+  .fm-info-body { position: fixed; left: 16px; right: 16px; top: auto; bottom: 16px; width: auto; max-height: 60vh; overflow-y: auto; }
+}
